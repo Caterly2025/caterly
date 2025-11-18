@@ -8,7 +8,7 @@
 ![Container diagram](/diagrams/c2_container.jpg)
 
 ## Component diagram
-![Component diagram](/diagrams/c3_component.png)
+![Component diagram](/diagrams/C3_Component.png)
 
 ## code diagram
 ![Code diagram](/diagrams/c4_code.png)
