@@ -5,8 +5,10 @@
 ![Context diagram](/diagrams/c1_context.jpg)
 
 ## Container diagram
-![Component diagram](/diagrams/c2_container.jpg)
+![Container diagram](/diagrams/c2_container.jpg)
 
-## Compnent diagram
+## Component diagram
+![Component diagram](/diagrams/c3_component.png)
 
 ## code diagram
+![Code diagram](/diagrams/c4_code.png)
