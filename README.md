@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started
@@ -34,3 +35,19 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+=======
+# caterly
+## caterly app
+
+## Context diagram
+![Context diagram](/diagrams/c1_context.jpg)
+
+## Container diagram
+![Container diagram](/diagrams/c2_container.jpg)
+
+## Component diagram
+![Component diagram](/diagrams/C3_Component.png)
+
+## code diagram
+![Code diagram](/diagrams/c4_code.png)
+>>>>>>> 058852dac17d6a48fe179f9a7e28f720f9bb27d6

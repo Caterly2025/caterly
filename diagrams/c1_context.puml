@@ -1,0 +1,14 @@
+@startuml
+!include  <C4/C4_Context.puml>
+!theme plain
+title Context diagram
+footer //Last updated: 2025-11-18 | Shiva  //
+
+Person(own, Owner)
+Person(cst,Customer)
+System(cat, Caterly, The Catering management system)
+
+cat <=right=> cst : reviews menu, Place order, accepts and pays invoice
+cat <=left=> own : notifications, accept order,review payment, 
+
+@enduml

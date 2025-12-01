@@ -1,0 +1,39 @@
+@startuml
+!include <C4/C4_Context.puml>
+!include <C4/C4_Container.puml>
+!include <C4/C4_Component.puml>
+!theme plain
+title Component diagram
+footer //Last updated: 2025-11-18 | Shiva  //
+
+
+System_Boundary(cat, "Caterly"){
+  Container(cstwebapp, "Web Application", "Customer web app", "Allows customers to view account information, view menu, create & modify order, submit order, view previous orders, and make payments.")
+  Container(ownwebapp, "Web Application", "Owner web app", "Allows Owners to view account information, update menus, review orders, view previous orders, and generate invoices, and make & receive payments.")
+  Container(cstapi, "Customer API Service", "API endpoints created in Flask.", "endpoint: Customer data")
+  Container(ownapi, "Owner API Service", "API endpoints created in Flask.", "endpoint: Owner data")
+  Container(db, "Database", "SQL Database", "Stores: Owners, customers, orders, orderitems, order updates,generated invoices, payment details, etc.")
+}
+
+System_Boundary(db,""){
+  Component(details1,"Add details")
+}
+System_Boundary(cstapi,""){
+  Component(details2,"Add details")
+}
+System_Boundary(ownapi,""){
+  Component(details3,"Add details")
+}
+System_Boundary(cstwebapp,""){
+  Component(details4,"Add details")
+}
+System_Boundary(ownwebapp,""){
+  Component(details5,"Add details")
+}
+
+' define relationships
+db -down-> ownapi
+db -down-> cstapi
+ownapi -down-> ownwebapp
+cstapi -down-> cstwebapp
+@enduml
