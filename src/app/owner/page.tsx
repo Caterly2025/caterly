@@ -18,6 +18,12 @@ type OrderItemRow = {
     | null;
 };
 
+type InvoiceRow = {
+  id: string;
+  status: string | null;
+  total: number | null;
+};
+
 type OrderRow = {
   id: string;
   status: string;
@@ -25,6 +31,7 @@ type OrderRow = {
   total: number | null;
   created_at: string;
   order_items: OrderItemRow[];
+  invoices: InvoiceRow[];
 };
 
 type Restaurant = {
@@ -43,6 +50,7 @@ export default function OwnerPage() {
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
+  const [invoiceLoadingId, setInvoiceLoadingId] = useState<string | null>(null);
 
   // Load restaurants owned by this user
   useEffect(() => {
@@ -77,7 +85,7 @@ export default function OwnerPage() {
     void loadRestaurants();
   }, [authLoading, user]);
 
-  // Load orders for selected restaurant
+  // Load orders for selected restaurant (including invoices)
   const loadOrders = async (restaurantId: string) => {
     if (!user || !restaurantId) return;
 
@@ -87,7 +95,24 @@ export default function OwnerPage() {
     const { data, error } = await supabase
       .from("orders")
       .select(
-        "id, status, special_request, total, created_at, order_items(id, quantity, price, menu_items(name))"
+        `
+        id,
+        status,
+        special_request,
+        total,
+        created_at,
+        order_items (
+          id,
+          quantity,
+          price,
+          menu_items ( name )
+        ),
+        invoices (
+          id,
+          status,
+          total
+        )
+      `
       )
       .eq("restaurant_id", restaurantId)
       .order("created_at", { ascending: false });
@@ -132,6 +157,48 @@ export default function OwnerPage() {
     }
   };
 
+  const generateInvoice = async (order: OrderRow) => {
+    if (!selectedRestaurant) return;
+
+    // If an invoice already exists, do nothing
+    if (order.invoices && order.invoices.length > 0) {
+      setMessage("Invoice already exists for this order.");
+      return;
+    }
+
+    setInvoiceLoadingId(order.id);
+    setMessage(null);
+
+    try {
+      // Prefer stored total; if null, compute from items as fallback
+      const amount =
+        order.total ??
+        order.order_items.reduce(
+          (sum, oi) => sum + oi.price * oi.quantity,
+          0
+        );
+
+      const { error } = await supabase.from("invoices").insert({
+        order_id: order.id,
+        total: amount,
+        status: "draft",
+      });
+
+      if (error) {
+        console.error(error);
+        setMessage("Failed to create invoice.");
+      } else {
+        setMessage("Invoice created.");
+        await loadOrders(selectedRestaurant.id);
+      }
+    } catch (err) {
+      console.error(err);
+      setMessage("Unexpected error creating invoice.");
+    } finally {
+      setInvoiceLoadingId(null);
+    }
+  };
+
   // --- Auth gating ---
   if (authLoading) {
     return <div>Checking authentication...</div>;
@@ -162,6 +229,12 @@ export default function OwnerPage() {
       </div>
     );
   }
+
+  const getItemName = (m: OrderItemRow["menu_items"]) => {
+    if (!m) return "Unknown item";
+    if (Array.isArray(m)) return m[0]?.name ?? "Unknown item";
+    return m.name;
+  };
 
   return (
     <div style={{ maxWidth: 1000, margin: "0 auto" }}>
@@ -230,93 +303,108 @@ export default function OwnerPage() {
         <p>No orders yet for this restaurant.</p>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-          {orders.map((order) => (
-            <div
-              key={order.id}
-              style={{
-                border: "1px solid #ddd",
-                borderRadius: 6,
-                padding: "1rem",
-                background: "white",
-              }}
-            >
+          {orders.map((order) => {
+            const invoice = order.invoices?.[0] ?? null;
+
+            return (
               <div
+                key={order.id}
                 style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  marginBottom: 8,
+                  border: "1px solid #ddd",
+                  borderRadius: 6,
+                  padding: "1rem",
+                  background: "white",
                 }}
               >
-                <div>
-                  <strong>Order #{order.id.slice(0, 8)}</strong>
-                  <div style={{ fontSize: "0.8rem", color: "#666" }}>
-                    Placed at: {new Date(order.created_at).toLocaleString()}
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    marginBottom: 8,
+                  }}
+                >
+                  <div>
+                    <strong>Order #{order.id.slice(0, 8)}</strong>
+                    <div style={{ fontSize: "0.8rem", color: "#666" }}>
+                      Placed at:{" "}
+                      {new Date(order.created_at).toLocaleString()}
+                    </div>
+                    {invoice && (
+                      <div style={{ fontSize: "0.85rem", marginTop: 4 }}>
+                        Invoice:{" "}
+                        <strong>{invoice.id.slice(0, 8)}</strong>{" "}
+                        ({invoice.status ?? "draft"})
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div>
+                      <span>Status: </span>
+                      <strong>{order.status}</strong>
+                    </div>
+                    <div style={{ marginTop: 4 }}>
+                      <strong>
+                        Total: ${order.total?.toFixed(2) ?? "0.00"}
+                      </strong>
+                    </div>
                   </div>
                 </div>
-                <div>
-                  <span>Status: </span>
-                  <strong>{order.status}</strong>
-                </div>
-              </div>
 
-              {order.special_request && (
-                <div style={{ marginBottom: 8 }}>
-                  <strong>Special request:</strong> {order.special_request}
-                </div>
-              )}
+                {order.special_request && (
+                  <div style={{ marginBottom: 8 }}>
+                    <strong>Special request:</strong> {order.special_request}
+                  </div>
+                )}
 
-              <table
-                style={{
-                  width: "100%",
-                  borderCollapse: "collapse",
-                  marginBottom: 8,
-                }}
-              >
-                <thead>
-                  <tr>
-                    <th
-                      style={{
-                        textAlign: "left",
-                        borderBottom: "1px solid #ddd",
-                      }}
-                    >
-                      Item
-                    </th>
-                    <th
-                      style={{
-                        textAlign: "right",
-                        borderBottom: "1px solid #ddd",
-                      }}
-                    >
-                      Qty
-                    </th>
-                    <th
-                      style={{
-                        textAlign: "right",
-                        borderBottom: "1px solid #ddd",
-                      }}
-                    >
-                      Price
-                    </th>
-                    <th
-                      style={{
-                        textAlign: "right",
-                        borderBottom: "1px solid #ddd",
-                      }}
-                    >
-                      Line Total
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {order.order_items?.map((oi) => {
-                    const itemName = Array.isArray(oi.menu_items)
-                      ? oi.menu_items[0]?.name ?? "Unknown item"
-                      : oi.menu_items?.name ?? "Unknown item";
-
-                    return (
+                <table
+                  style={{
+                    width: "100%",
+                    borderCollapse: "collapse",
+                    marginBottom: 8,
+                  }}
+                >
+                  <thead>
+                    <tr>
+                      <th
+                        style={{
+                          textAlign: "left",
+                          borderBottom: "1px solid #ddd",
+                        }}
+                      >
+                        Item
+                      </th>
+                      <th
+                        style={{
+                          textAlign: "right",
+                          borderBottom: "1px solid #ddd",
+                        }}
+                      >
+                        Qty
+                      </th>
+                      <th
+                        style={{
+                          textAlign: "right",
+                          borderBottom: "1px solid #ddd",
+                        }}
+                      >
+                        Price
+                      </th>
+                      <th
+                        style={{
+                          textAlign: "right",
+                          borderBottom: "1px solid #ddd",
+                        }}
+                      >
+                        Line Total
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {order.order_items?.map((oi) => (
                       <tr key={oi.id}>
-                        <td style={{ padding: "4px 0" }}>{itemName}</td>
+                        <td style={{ padding: "4px 0" }}>
+                          {getItemName(oi.menu_items)}
+                        </td>
                         <td style={{ padding: "4px 0", textAlign: "right" }}>
                           {oi.quantity}
                         </td>
@@ -327,46 +415,60 @@ export default function OwnerPage() {
                           {(oi.price * oi.quantity).toFixed(2)}
                         </td>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                    ))}
+                  </tbody>
+                </table>
 
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-              >
-                <div>
-                  <strong>Total:</strong>{" "}
-                  ${order.total?.toFixed(2) ?? "0.00"}
-                </div>
-                <div style={{ display: "flex", gap: "0.5rem" }}>
-                  <button
-                    onClick={() => updateStatus(order.id, "owner_review")}
-                  >
-                    Mark as Reviewed
-                  </button>
-                  <button
-                    onClick={() =>
-                      updateStatus(order.id, "changes_requested")
-                    }
-                  >
-                    Request Changes
-                  </button>
-                  <button
-                    onClick={() =>
-                      updateStatus(order.id, "customer_accepted")
-                    }
-                  >
-                    Mark as Accepted
-                  </button>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    gap: "0.75rem",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <div>
+                    <strong>Total:</strong>{" "}
+                    ${order.total?.toFixed(2) ?? "0.00"}
+                  </div>
+                  <div style={{ display: "flex", gap: "0.5rem" }}>
+                    <button
+                      onClick={() => updateStatus(order.id, "owner_review")}
+                    >
+                      Mark as Reviewed
+                    </button>
+                    <button
+                      onClick={() =>
+                        updateStatus(order.id, "changes_requested")
+                      }
+                    >
+                      Request Changes
+                    </button>
+                    <button
+                      onClick={() =>
+                        updateStatus(order.id, "customer_accepted")
+                      }
+                    >
+                      Mark as Accepted
+                    </button>
+                    <button
+                      onClick={() => generateInvoice(order)}
+                      disabled={
+                        !!invoice || invoiceLoadingId === order.id
+                      }
+                    >
+                      {invoice
+                        ? "Invoice created"
+                        : invoiceLoadingId === order.id
+                        ? "Creating..."
+                        : "Generate invoice"}
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

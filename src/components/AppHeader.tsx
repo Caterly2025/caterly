@@ -30,8 +30,11 @@ export function AppHeader() {
           Customer
         </a>
         <a href="/customer/orders" style={{ color: "white", textDecoration: "none" }}>
-  (My Orders)
-</a>
+          My Orders
+        </a>
+        <a href="/customer/invoices" style={{ color: "white", textDecoration: "none" }}>
+          My Invoices
+        </a>
 
         <a href="/owner" style={{ color: "white", textDecoration: "none" }}>
           Owner
