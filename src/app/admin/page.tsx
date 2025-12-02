@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { useSupabaseUser } from "@/hooks/useSupabaseUser";
 
 type Restaurant = {
   id: string;
@@ -21,7 +22,18 @@ type MenuItem = {
   price: number;
 };
 
+type UserProfile = {
+  id: string;
+  email: string | null;
+  role: string;
+};
+
 export default function AdminPage() {
+  const { user, loading: authLoading } = useSupabaseUser();
+
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [profileLoading, setProfileLoading] = useState(true);
+
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [selectedRestaurant, setSelectedRestaurant] = useState<Restaurant | null>(null);
 
@@ -36,7 +48,7 @@ export default function AdminPage() {
   // Form state for new restaurant
   const [newRestaurantName, setNewRestaurantName] = useState("");
   const [newRestaurantDescription, setNewRestaurantDescription] = useState("");
-  const [newRestaurantOwnerId, setNewRestaurantOwnerId] = useState(""); // must be a valid auth.users.id
+  const [newRestaurantOwnerId, setNewRestaurantOwnerId] = useState("");
 
   // Form state for new menu
   const [newMenuName, setNewMenuName] = useState("");
@@ -46,9 +58,44 @@ export default function AdminPage() {
   const [newItemDescription, setNewItemDescription] = useState("");
   const [newItemPrice, setNewItemPrice] = useState<string>("");
 
-  // Load all restaurants on mount
+  // 1) Load user profile (role) when authenticated user is available
+  useEffect(() => {
+    const loadProfile = async () => {
+      if (authLoading) return;
+      if (!user) {
+        setProfile(null);
+        setProfileLoading(false);
+        return;
+      }
+
+      setProfileLoading(true);
+      const { data, error } = await supabase
+        .from("user_profiles")
+        .select("id, email, role")
+        .eq("id", user.id)
+        .single();
+
+      if (error) {
+        console.error("Error loading user profile:", error);
+        setProfile(null);
+      } else {
+        setProfile(data as UserProfile);
+      }
+      setProfileLoading(false);
+    };
+
+    void loadProfile();
+  }, [authLoading, user]);
+
+  // 2) Load all restaurants on mount (once auth & profile are ready and user is admin)
   useEffect(() => {
     const loadRestaurants = async () => {
+      if (authLoading || profileLoading) return;
+      if (!user || !profile || profile.role !== "admin") {
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
       setMessage(null);
 
@@ -74,13 +121,13 @@ export default function AdminPage() {
       setLoading(false);
     };
 
-    loadRestaurants();
-  }, []);
+    void loadRestaurants();
+  }, [authLoading, profileLoading, user, profile]);
 
   // Load menus when selectedRestaurant changes
   useEffect(() => {
     const loadMenus = async () => {
-      if (!selectedRestaurant) {
+      if (!selectedRestaurant || !user || !profile || profile.role !== "admin") {
         setMenus([]);
         setSelectedMenu(null);
         setMenuItems([]);
@@ -110,13 +157,13 @@ export default function AdminPage() {
       }
     };
 
-    loadMenus();
-  }, [selectedRestaurant]);
+    void loadMenus();
+  }, [selectedRestaurant, user, profile]);
 
   // Load menu items when selectedMenu changes
   useEffect(() => {
     const loadMenuItems = async () => {
-      if (!selectedMenu) {
+      if (!selectedMenu || !user || !profile || profile.role !== "admin") {
         setMenuItems([]);
         return;
       }
@@ -136,8 +183,8 @@ export default function AdminPage() {
       setMenuItems((data || []) as MenuItem[]);
     };
 
-    loadMenuItems();
-  }, [selectedMenu]);
+    void loadMenuItems();
+  }, [selectedMenu, user, profile]);
 
   // Create a new restaurant
   const createRestaurant = async () => {
@@ -175,7 +222,6 @@ export default function AdminPage() {
       setSelectedRestaurant(created);
       setNewRestaurantName("");
       setNewRestaurantDescription("");
-      // keep owner id as-is for convenience
       setMessage("Restaurant created successfully.");
     } catch (err) {
       console.error(err);
@@ -272,13 +318,45 @@ export default function AdminPage() {
     }
   };
 
+  // --- Auth + role gating ---
+
+  if (authLoading || profileLoading) {
+    return <div>Checking authentication…</div>;
+  }
+
+  if (!user) {
+    return (
+      <div style={{ maxWidth: 800, margin: "0 auto" }}>
+        <h1>Admin / Owner – Caterly</h1>
+        <p>You must be logged in to use the admin tools.</p>
+        <p>
+          Go to <a href="/auth">Auth</a> to login or sign up.
+        </p>
+      </div>
+    );
+  }
+
+  if (!profile || profile.role !== "admin") {
+    return (
+      <div style={{ maxWidth: 800, margin: "0 auto" }}>
+        <h1>Admin – Caterly</h1>
+        <p>Your account does not have admin permissions.</p>
+        <p>
+          Current role: <code>{profile?.role ?? "unknown"}</code>
+        </p>
+      </div>
+    );
+  }
+
   if (loading) {
     return <div>Loading admin view...</div>;
   }
 
+  // --- Main admin UI (admins only) ---
+
   return (
     <div style={{ maxWidth: 1200, margin: "0 auto" }}>
-      <h1>Admin / Owner – Manage Restaurants & Menus</h1>
+      <h1>Admin – Manage Restaurants &amp; Menus</h1>
 
       {message && (
         <div
@@ -350,8 +428,7 @@ export default function AdminPage() {
                 />
               </label>
               <div style={{ fontSize: "0.8rem", color: "#6b7280" }}>
-                For now, paste a valid user id from <strong>Auth → Users</strong>,
-                or reuse one of your seeded IDs.
+                Paste a valid user id from <strong>Auth → Users</strong>, or reuse a seeded ID.
               </div>
             </div>
             <button type="button" onClick={createRestaurant}>
