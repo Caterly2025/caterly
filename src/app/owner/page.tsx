@@ -8,9 +8,14 @@ type OrderItemRow = {
   id: string;
   quantity: number;
   price: number;
-  menu_items: {
-    name: string;
-  } | null;
+  menu_items:
+    | {
+        name: string;
+      }
+    | {
+        name: string;
+      }[]
+    | null;
 };
 
 type OrderRow = {
@@ -32,7 +37,8 @@ export default function OwnerPage() {
   const { user, loading: authLoading } = useSupabaseUser();
 
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
-  const [selectedRestaurant, setSelectedRestaurant] = useState<Restaurant | null>(null);
+  const [selectedRestaurant, setSelectedRestaurant] =
+    useState<Restaurant | null>(null);
 
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
@@ -68,7 +74,7 @@ export default function OwnerPage() {
       }
     };
 
-    loadRestaurants();
+    void loadRestaurants();
   }, [authLoading, user]);
 
   // Load orders for selected restaurant
@@ -93,7 +99,7 @@ export default function OwnerPage() {
       return;
     }
 
-    setOrders((data || []) as OrderRow[]);
+    setOrders((data || []) as unknown as OrderRow[]);
     setLoadingOrders(false);
   };
 
@@ -175,7 +181,7 @@ export default function OwnerPage() {
         </div>
       )}
 
-      {/* Restaurant selector (in case owner has multiple) */}
+      {/* Restaurant selector */}
       <div style={{ marginBottom: "1rem" }}>
         <h2>Your restaurants</h2>
         <ul style={{ listStyle: "none", padding: 0 }}>
@@ -303,22 +309,26 @@ export default function OwnerPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {order.order_items?.map((oi) => (
-                    <tr key={oi.id}>
-                      <td style={{ padding: "4px 0" }}>
-                        {oi.menu_items?.name ?? "Unknown item"}
-                      </td>
-                      <td style={{ padding: "4px 0", textAlign: "right" }}>
-                        {oi.quantity}
-                      </td>
-                      <td style={{ padding: "4px 0", textAlign: "right" }}>
-                        ${oi.price.toFixed(2)}
-                      </td>
-                      <td style={{ padding: "4px 0", textAlign: "right" }}>
-                        {(oi.price * oi.quantity).toFixed(2)}
-                      </td>
-                    </tr>
-                  ))}
+                  {order.order_items?.map((oi) => {
+                    const itemName = Array.isArray(oi.menu_items)
+                      ? oi.menu_items[0]?.name ?? "Unknown item"
+                      : oi.menu_items?.name ?? "Unknown item";
+
+                    return (
+                      <tr key={oi.id}>
+                        <td style={{ padding: "4px 0" }}>{itemName}</td>
+                        <td style={{ padding: "4px 0", textAlign: "right" }}>
+                          {oi.quantity}
+                        </td>
+                        <td style={{ padding: "4px 0", textAlign: "right" }}>
+                          ${oi.price.toFixed(2)}
+                        </td>
+                        <td style={{ padding: "4px 0", textAlign: "right" }}>
+                          {(oi.price * oi.quantity).toFixed(2)}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
 
@@ -340,12 +350,16 @@ export default function OwnerPage() {
                     Mark as Reviewed
                   </button>
                   <button
-                    onClick={() => updateStatus(order.id, "changes_requested")}
+                    onClick={() =>
+                      updateStatus(order.id, "changes_requested")
+                    }
                   >
                     Request Changes
                   </button>
                   <button
-                    onClick={() => updateStatus(order.id, "customer_accepted")}
+                    onClick={() =>
+                      updateStatus(order.id, "customer_accepted")
+                    }
                   >
                     Mark as Accepted
                   </button>
