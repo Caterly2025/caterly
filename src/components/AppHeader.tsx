@@ -28,9 +28,9 @@ export function AppHeader() {
         </a>
         <a href="/customer" style={{ color: "white", textDecoration: "none" }}>
           Customer
-        </a>|
+        </a>
         <a href="/customer/orders" style={{ color: "white", textDecoration: "none" }}>
-  My Orders
+  (My Orders)
 </a>
 
         <a href="/owner" style={{ color: "white", textDecoration: "none" }}>
