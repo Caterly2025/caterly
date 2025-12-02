@@ -101,6 +101,28 @@ const formatDateLabel = (iso: string) => {
   return d.toLocaleDateString();
 };
 
+const getDateFromFilter = (range: string) => {
+  const now = new Date();
+  const start = new Date(now);
+
+  switch (range) {
+    case "today": {
+      start.setHours(0, 0, 0, 0);
+      return start.toISOString();
+    }
+    case "last7": {
+      start.setDate(start.getDate() - 7);
+      return start.toISOString();
+    }
+    case "last30": {
+      start.setDate(start.getDate() - 30);
+      return start.toISOString();
+    }
+    default:
+      return null; // all dates
+  }
+};
+
 export default function OwnerPage() {
   const { user, loading: authLoading } = useSupabaseUser();
 
@@ -117,7 +139,7 @@ export default function OwnerPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [dateRangeFilter, setDateRangeFilter] = useState<string>("all");
 
-  // Auto-refresh
+  // Auto-refresh (seconds)
   const [refreshIntervalSec, setRefreshIntervalSec] = useState<number>(300);
 
   // ─────────────────────────────────────
@@ -156,32 +178,7 @@ export default function OwnerPage() {
   }, [authLoading, user]);
 
   // ─────────────────────────────────────
-  // Helper: compute date range bounds
-  // ─────────────────────────────────────
-  const getDateFromFilter = () => {
-    const now = new Date();
-    const start = new Date(now); // copy
-
-    switch (dateRangeFilter) {
-      case "today": {
-        start.setHours(0, 0, 0, 0);
-        return start.toISOString();
-      }
-      case "last7": {
-        start.setDate(start.getDate() - 7);
-        return start.toISOString();
-      }
-      case "last30": {
-        start.setDate(start.getDate() - 30);
-        return start.toISOString();
-      }
-      default:
-        return null; // all dates
-    }
-  };
-
-  // ─────────────────────────────────────
-  // Load orders for selected restaurant
+  // Load orders helper
   // ─────────────────────────────────────
   const loadOrders = async (
     restaurantId: string,
@@ -224,7 +221,7 @@ export default function OwnerPage() {
     }
 
     if (currentDateRangeFilter !== "all") {
-      const from = getDateFromFilter();
+      const from = getDateFromFilter(currentDateRangeFilter);
       if (from) {
         query = query.gte("created_at", from);
       }
@@ -292,7 +289,6 @@ export default function OwnerPage() {
   const generateInvoice = async (order: OrderRow) => {
     if (!selectedRestaurant) return;
 
-    // Only allow when customer has accepted
     if (order.status !== "customer_accepted") {
       setMessage("Invoice can only be created after customer acceptance.");
       return;
@@ -337,8 +333,65 @@ export default function OwnerPage() {
     }
   };
 
+  const getItemName = (m: OrderItemRow["menu_items"]) => {
+    if (!m) return "Unknown item";
+    if (Array.isArray(m)) return m[0]?.name ?? "Unknown item";
+    return m.name;
+  };
+
   // ─────────────────────────────────────
-  // Auth gating
+  // Grouping: Day → Status (restaurant is already selected)
+  // ─────────────────────────────────────
+  const grouped = useMemo(() => {
+    const byDay: Record<
+      string,
+      {
+        dateLabel: string;
+        orders: OrderRow[];
+      }
+    > = {};
+
+    for (const o of orders) {
+      const d = new Date(o.created_at);
+      const key = `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+      if (!byDay[key]) {
+        byDay[key] = {
+          dateLabel: formatDateLabel(o.created_at),
+          orders: [],
+        };
+      }
+      byDay[key].orders.push(o);
+    }
+
+    const dayEntries = Object.entries(byDay).sort(([aKey], [bKey]) =>
+      aKey < bKey ? 1 : -1
+    );
+
+    return dayEntries.map(([dayKey, { dateLabel, orders }]) => {
+      const byStatus: Record<string, OrderRow[]> = {};
+      for (const o of orders) {
+        if (!byStatus[o.status]) byStatus[o.status] = [];
+        byStatus[o.status].push(o);
+      }
+
+      const statusEntries = Object.entries(byStatus).sort(
+        ([aStatus], [bStatus]) => aStatus.localeCompare(bStatus)
+      );
+
+      return {
+        dayKey,
+        dateLabel,
+        statuses: statusEntries.map(([status, ordersInStatus]) => ({
+          status,
+          label: formatStatus(status),
+          orders: ordersInStatus,
+        })),
+      };
+    });
+  }, [orders]);
+
+  // ─────────────────────────────────────
+  // Auth gating & render
   // ─────────────────────────────────────
   if (authLoading) {
     return <div>Checking authentication...</div>;
@@ -369,69 +422,6 @@ export default function OwnerPage() {
     );
   }
 
-  const getItemName = (m: OrderItemRow["menu_items"]) => {
-    if (!m) return "Unknown item";
-    if (Array.isArray(m)) return m[0]?.name ?? "Unknown item";
-    return m.name;
-  };
-
-  // ─────────────────────────────────────
-  // Grouping: Restaurant (selection) → Day → Status
-  // ─────────────────────────────────────
-  const grouped = useMemo(() => {
-    // already filtered by restaurant_id in query;
-    // here we group by day, then status
-    const byDay: Record<
-      string,
-      {
-        dateLabel: string;
-        orders: OrderRow[];
-      }
-    > = {};
-
-    for (const o of orders) {
-      const d = new Date(o.created_at);
-      const key = `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
-      if (!byDay[key]) {
-        byDay[key] = {
-          dateLabel: formatDateLabel(o.created_at),
-          orders: [],
-        };
-      }
-      byDay[key].orders.push(o);
-    }
-
-    // convert to array sorted by most recent day first
-    const dayEntries = Object.entries(byDay).sort(([aKey], [bKey]) =>
-      aKey < bKey ? 1 : -1
-    );
-
-    return dayEntries.map(([dayKey, { dateLabel, orders }]) => {
-      const byStatus: Record<string, OrderRow[]> = {};
-      for (const o of orders) {
-        if (!byStatus[o.status]) byStatus[o.status] = [];
-        byStatus[o.status].push(o);
-      }
-
-      const statusEntries = Object.entries(byStatus).sort(
-        ([aStatus], [bStatus]) => aStatus.localeCompare(bStatus)
-      );
-
-      return {
-        dayKey,
-        dateLabel,
-        statuses: statusEntries.map(([status, ordersInStatus]) => ({
-          status,
-          label: formatStatus(status),
-          orders: ordersInStatus,
-        })),
-      };
-    });
-  }, [orders]);
-
-  // ─────────────────────────────────────
-  // Render
-  // ─────────────────────────────────────
   return (
     <div style={{ maxWidth: 1100, margin: "0 auto" }}>
       <h1>Owner View – Caterly</h1>
@@ -450,7 +440,7 @@ export default function OwnerPage() {
         </div>
       )}
 
-      {/* Restaurant selector */}
+      {/* Restaurant selector + filters */}
       <div
         style={{
           marginBottom: "1rem",
@@ -499,7 +489,6 @@ export default function OwnerPage() {
           </div>
         )}
 
-        {/* Filters + refresh controls */}
         <div
           style={{
             display: "flex",
