@@ -41,6 +41,28 @@ type Restaurant = {
   description: string | null;
 };
 
+
+const formatStatus = (status: string) => {
+  switch (status) {
+    case "pending":
+      return "Pending owner review";
+    case "owner_review":
+      return "Approved by owner";
+    case "changes_requested":
+      return "Changes requested";
+    case "customer_accepted":
+      return "Accepted by customer";
+    case "completed":
+      return "Completed";
+    case "cancelled":
+      return "Cancelled";
+    default:
+      return status;
+  }
+};
+
+
+
 export default function OwnerPage() {
   const { user, loading: authLoading } = useSupabaseUser();
 
@@ -308,6 +330,8 @@ export default function OwnerPage() {
           {orders.map((order) => {
             const invoice = order.invoices?.[0] ?? null;
 
+            const canGenerateInvoice = !invoice && order.status === "customer_accepted";
+
             return (
               <div
                 key={order.id}
@@ -342,7 +366,7 @@ export default function OwnerPage() {
                   <div style={{ textAlign: "right" }}>
                     <div>
                       <span>Status: </span>
-                      <strong>{order.status}</strong>
+                      <strong>{formatStatus(order.status)}</strong>
                     </div>
                     <div style={{ marginTop: 4 }}>
                       <strong>
@@ -435,30 +459,16 @@ export default function OwnerPage() {
                     ${order.total?.toFixed(2) ?? "0.00"}
                   </div>
                   <div style={{ display: "flex", gap: "0.5rem" }}>
-                    <button
-                      onClick={() => updateStatus(order.id, "owner_review")}
-                    >
-                      Mark as Reviewed
-                    </button>
-                    <button
-                      onClick={() =>
-                        updateStatus(order.id, "changes_requested")
-                      }
-                    >
-                      Request Changes
-                    </button>
-                    <button
-                      onClick={() =>
-                        updateStatus(order.id, "customer_accepted")
-                      }
-                    >
-                      Mark as Accepted
-                    </button>
+                    <button onClick={() => updateStatus(order.id, "owner_review")} > Mark as Reviewed </button>
+                    <button onClick={() => updateStatus(order.id, "changes_requested")} > Request Changes </button>
+                    <button onClick={() => updateStatus(order.id, "customer_accepted") } > Mark as Accepted </button>
+                    <button onClick={() => updateStatus(order.id, "completed")}> Mark as Completed </button>
+                    <button onClick={() => updateStatus(order.id, "cancelled")}> Cancel Order </button>
+
+
                     <button
                       onClick={() => generateInvoice(order)}
-                      disabled={
-                        !!invoice || invoiceLoadingId === order.id
-                      }
+                      disabled={!canGenerateInvoice || invoiceLoadingId === order.id}
                     >
                       {invoice
                         ? invoice.is_paid
@@ -466,8 +476,11 @@ export default function OwnerPage() {
                           : "Invoice created"
                         : invoiceLoadingId === order.id
                         ? "Creating..."
+                        : order.status !== "customer_accepted"
+                        ? "Wait for acceptance"
                         : "Generate invoice"}
                     </button>
+
                   </div>
                 </div>
               </div>
