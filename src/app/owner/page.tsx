@@ -20,8 +20,9 @@ type OrderItemRow = {
 
 type InvoiceRow = {
   id: string;
-  status: string | null;
   total: number | null;
+  is_paid: boolean | null;
+  created_at: string;
 };
 
 type OrderRow = {
@@ -109,8 +110,9 @@ export default function OwnerPage() {
         ),
         invoices (
           id,
-          status,
-          total
+          total,
+          is_paid,
+          created_at
         )
       `
       )
@@ -118,7 +120,7 @@ export default function OwnerPage() {
       .order("created_at", { ascending: false });
 
     if (error) {
-      console.error(error);
+      console.error("Error loading orders:", error);
       setMessage("Error loading orders.");
       setLoadingOrders(false);
       return;
@@ -181,11 +183,11 @@ export default function OwnerPage() {
       const { error } = await supabase.from("invoices").insert({
         order_id: order.id,
         total: amount,
-        status: "draft",
+        is_paid: false,
       });
 
       if (error) {
-        console.error(error);
+        console.error("Error inserting invoice:", error);
         setMessage("Failed to create invoice.");
       } else {
         setMessage("Invoice created.");
@@ -333,7 +335,7 @@ export default function OwnerPage() {
                       <div style={{ fontSize: "0.85rem", marginTop: 4 }}>
                         Invoice:{" "}
                         <strong>{invoice.id.slice(0, 8)}</strong>{" "}
-                        ({invoice.status ?? "draft"})
+                        ({invoice.is_paid ? "paid" : "unpaid"})
                       </div>
                     )}
                   </div>
@@ -459,7 +461,9 @@ export default function OwnerPage() {
                       }
                     >
                       {invoice
-                        ? "Invoice created"
+                        ? invoice.is_paid
+                          ? "Invoice paid"
+                          : "Invoice created"
                         : invoiceLoadingId === order.id
                         ? "Creating..."
                         : "Generate invoice"}

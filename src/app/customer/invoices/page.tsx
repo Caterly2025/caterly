@@ -20,8 +20,8 @@ type OrderRef = OrderSingle | OrderSingle[] | null;
 
 type InvoiceRow = {
   id: string;
-  status: string | null;
   total: number | null;
+  is_paid: boolean | null;
   created_at: string;
   orders: OrderRef;
 };
@@ -49,8 +49,8 @@ export default function CustomerInvoicesPage() {
         .select(
           `
           id,
-          status,
           total,
+          is_paid,
           created_at,
           orders (
             id,
@@ -61,7 +61,6 @@ export default function CustomerInvoicesPage() {
           )
         `
         )
-        // Only invoices whose order belongs to the current customer
         .eq("orders.customer_id", user.id)
         .order("created_at", { ascending: false });
 
@@ -132,7 +131,7 @@ export default function CustomerInvoicesPage() {
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
           {invoices.map((inv) => {
-            const order = getOrder(inv.orders as OrderRef);
+            const order = getOrder(inv.orders);
             const restaurantName = order
               ? getRestaurantName(order.restaurants)
               : "Unknown restaurant";
@@ -174,7 +173,7 @@ export default function CustomerInvoicesPage() {
                   <div style={{ textAlign: "right" }}>
                     <div>
                       <span>Status: </span>
-                      <strong>{inv.status ?? "draft"}</strong>
+                      <strong>{inv.is_paid ? "paid" : "unpaid"}</strong>
                     </div>
                     <div style={{ marginTop: 4 }}>
                       <strong>
