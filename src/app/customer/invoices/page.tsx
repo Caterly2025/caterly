@@ -9,20 +9,14 @@ type RestaurantRef =
   | { name: string }[]
   | null;
 
-type OrderRef =
-  | {
-      id: string;
-      status: string;
-      created_at: string;
-      restaurants: RestaurantRef;
-    }
-  | {
-      id: string;
-      status: string;
-      created_at: string;
-      restaurants: RestaurantRef;
-    }[]
-  | null;
+type OrderSingle = {
+  id: string;
+  status: string;
+  created_at: string;
+  restaurants: RestaurantRef;
+};
+
+type OrderRef = OrderSingle | OrderSingle[] | null;
 
 type InvoiceRow = {
   id: string;
@@ -62,14 +56,17 @@ export default function CustomerInvoicesPage() {
             id,
             status,
             created_at,
-            restaurants ( name )
+            restaurants ( name ),
+            customer_id
           )
         `
         )
+        // Only invoices whose order belongs to the current customer
+        .eq("orders.customer_id", user.id)
         .order("created_at", { ascending: false });
 
       if (error) {
-        console.error(error);
+        console.error("Error loading invoices:", error);
         setMessage("Error loading your invoices.");
         setLoadingInvoices(false);
         return;
@@ -135,7 +132,7 @@ export default function CustomerInvoicesPage() {
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
           {invoices.map((inv) => {
-            const order = getOrder(inv.orders);
+            const order = getOrder(inv.orders as OrderRef);
             const restaurantName = order
               ? getRestaurantName(order.restaurants)
               : "Unknown restaurant";
