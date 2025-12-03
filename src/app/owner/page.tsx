@@ -36,14 +36,16 @@ type OrderStatusHistoryRow = {
 
 type OrderRow = {
   id: string;
+  order_number: string | null;
   status: string;
   special_request: string | null;
   total: number | null;
   created_at: string;
   order_items: OrderItemRow[];
   invoices: InvoiceRow[];
-  order_status_history: OrderStatusHistoryRow[]; 
+  order_status_history: OrderStatusHistoryRow[];
 };
+
 
 type Restaurant = {
   id: string;
@@ -216,6 +218,7 @@ export default function OwnerPage() {
     .select(
       `
       id,
+      order_number,
       status,
       special_request,
       total,
@@ -455,7 +458,7 @@ export default function OwnerPage() {
   return (
     <div style={{ maxWidth: 1100, margin: "0 auto" }}>
       <h1>Owner View – Caterly</h1>
-      
+
       {/* Notifications for owner */}
       <div
         style={{
@@ -713,7 +716,7 @@ export default function OwnerPage() {
                             }}
                           >
                             <div>
-                              <strong>Order #{order.id.slice(0, 8)}</strong>
+                              <strong> Order {order.order_number ?? `#${order.id.slice(0, 8)}`} </strong>
                               <div
                                 style={{
                                   fontSize: "0.8rem",

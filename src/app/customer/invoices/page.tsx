@@ -11,6 +11,7 @@ type RestaurantRef =
 
 type OrderSingle = {
   id: string;
+  order_number: string | null;
   status: string;
   created_at: string;
   restaurants: RestaurantRef;
@@ -49,6 +50,7 @@ export default function CustomerInvoicesPage() {
         .select(
           `
           id,
+          order_number,
           total,
           is_paid,
           created_at,
@@ -162,8 +164,7 @@ export default function CustomerInvoicesPage() {
                     {order && (
                       <div style={{ fontSize: "0.85rem", marginTop: 4 }}>
                         Order:{" "}
-                        <strong>{order.id.slice(0, 8)}</strong>{" "}
-                        ({order.status})
+                        <strong> {order.order_number ?? `#${order.id.slice(0, 8)}`} </strong>{" "} ({order.status})
                       </div>
                     )}
                     <div style={{ fontSize: "0.85rem", marginTop: 4 }}>

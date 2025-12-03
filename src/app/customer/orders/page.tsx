@@ -26,6 +26,7 @@ type OrderItemRow = {
 
 type OrderRow = {
   id: string;
+  order_number: string | null;
   status: string;
   special_request: string | null;
   total: number | null;
@@ -87,6 +88,7 @@ export default function CustomerOrdersPage() {
     .select(
       `
       id,
+      order_number,
       status,
       special_request,
       total,
@@ -327,7 +329,8 @@ export default function CustomerOrdersPage() {
                   }}
                 >
                   <div>
-                    <strong>Order #{order.id.slice(0, 8)}</strong>
+                    <strong>  Order {order.order_number ?? `#${order.id.slice(0, 8)}`} </strong>
+
                     <div style={{ fontSize: "0.8rem", color: "#666" }}>
                       Placed at:{" "}
                       {new Date(order.created_at).toLocaleString()}
