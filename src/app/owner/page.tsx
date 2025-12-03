@@ -25,6 +25,14 @@ type InvoiceRow = {
   created_at: string;
 };
 
+type OrderStatusHistoryRow = {
+  id: string;
+  old_status: string | null;
+  new_status: string;
+  changed_by: string | null;
+  changed_at: string;
+};
+
 type OrderRow = {
   id: string;
   status: string;
@@ -33,6 +41,7 @@ type OrderRow = {
   created_at: string;
   order_items: OrderItemRow[];
   invoices: InvoiceRow[];
+  order_status_history: OrderStatusHistoryRow[]; 
 };
 
 type Restaurant = {
@@ -40,6 +49,10 @@ type Restaurant = {
   name: string;
   description: string | null;
 };
+
+
+
+
 
 const STATUS_OPTIONS = [
   { value: "all", label: "All statuses" },
@@ -190,29 +203,37 @@ export default function OwnerPage() {
     setLoadingOrders(true);
     setMessage(null);
 
-    let query = supabase
-      .from("orders")
-      .select(
-        `
-        id,
-        status,
-        special_request,
-        total,
-        created_at,
-        order_items (
-          id,
-          quantity,
-          price,
-          menu_items ( name )
-        ),
-        invoices (
-          id,
-          total,
-          is_paid,
-          created_at
-        )
+  let query = supabase
+    .from("orders")
+    .select(
       `
+      id,
+      status,
+      special_request,
+      total,
+      created_at,
+      order_items (
+        id,
+        quantity,
+        price,
+        menu_items ( name )
+      ),
+      invoices (
+        id,
+        total,
+        is_paid,
+        created_at
+      ),
+      order_status_history (
+        id,
+        old_status,
+        new_status,
+        changed_by,
+        changed_at
       )
+    `
+    )
+
       .eq("restaurant_id", restaurantId)
       .order("created_at", { ascending: false });
 
@@ -795,6 +816,33 @@ export default function OwnerPage() {
                                   : "Generate invoice"}
                               </button>
                             </div>
+
+                            {/* Status history timeline */}
+                            {order.order_status_history && order.order_status_history.length > 0 && (
+                              <div style={{ marginBottom: 8, fontSize: "0.85rem" }}>
+                                <strong>Status history:</strong>
+                                <ul style={{ margin: "4px 0 0 0", paddingLeft: "1.1rem" }}>
+                                  {[...order.order_status_history]
+                                    .sort(
+                                      (a, b) =>
+                                        new Date(a.changed_at).getTime() -
+                                        new Date(b.changed_at).getTime()
+                                    )
+                                    .map((h) => (
+                                      <li key={h.id}>
+                                        <span>
+                                          {new Date(h.changed_at).toLocaleString()} –{" "}
+                                          {h.old_status
+                                            ? `${formatStatus(h.old_status)} → `
+                                            : ""}
+                                          <strong>{formatStatus(h.new_status)}</strong>
+                                        </span>
+                                      </li>
+                                    ))}
+                                </ul>
+                              </div>
+                            )}
+
                           </div>
                         </div>
                       );

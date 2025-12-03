@@ -4,6 +4,14 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useSupabaseUser } from "@/hooks/useSupabaseUser";
 
+type OrderStatusHistoryRow = {
+  id: string;
+  old_status: string | null;
+  new_status: string;
+  changed_by: string | null;
+  changed_at: string;
+};
+
 type OrderItemRow = {
   id: string;
   quantity: number;
@@ -25,7 +33,11 @@ type OrderRow = {
     | { name: string }[]
     | null;
   order_items: OrderItemRow[];
+  order_status_history: OrderStatusHistoryRow[];
 };
+
+
+
 
 const formatStatus = (status: string) => {
   switch (status) {
@@ -58,26 +70,34 @@ export default function CustomerOrdersPage() {
     setLoadingOrders(true);
     setMessage(null);
 
-    const { data, error } = await supabase
-      .from("orders")
-      .select(
-        `
-        id,
-        status,
-        special_request,
-        total,
-        created_at,
-        restaurants ( name ),
-        order_items (
-          id,
-          quantity,
-          price,
-          menu_items ( name )
-        )
+  const { data, error } = await supabase
+    .from("orders")
+    .select(
       `
+      id,
+      status,
+      special_request,
+      total,
+      created_at,
+      restaurants ( name ),
+      order_items (
+        id,
+        quantity,
+        price,
+        menu_items ( name )
+      ),
+      order_status_history (
+        id,
+        old_status,
+        new_status,
+        changed_by,
+        changed_at
       )
-      .eq("customer_id", currentUserId)
-      .order("created_at", { ascending: false });
+    `
+    )
+    .eq("customer_id", currentUserId)
+    .order("created_at", { ascending: false });
+
 
     if (error) {
       console.error(error);
@@ -316,6 +336,34 @@ export default function CustomerOrdersPage() {
                     ))}
                   </tbody>
                 </table>
+
+
+                {/* Status history timeline */}
+                {order.order_status_history && order.order_status_history.length > 0 && (
+                  <div style={{ marginTop: 6, fontSize: "0.85rem" }}>
+                    <strong>Status history:</strong>
+                    <ul style={{ margin: "4px 0 0 0", paddingLeft: "1.1rem" }}>
+                      {[...order.order_status_history]
+                        .sort(
+                          (a, b) =>
+                            new Date(a.changed_at).getTime() -
+                            new Date(b.changed_at).getTime()
+                        )
+                        .map((h) => (
+                          <li key={h.id}>
+                            <span>
+                              {new Date(h.changed_at).toLocaleString()} –{" "}
+                              {h.old_status
+                                ? `${formatStatus(h.old_status)} → `
+                                : ""}
+                              <strong>{formatStatus(h.new_status)}</strong>
+                            </span>
+                          </li>
+                        ))}
+                    </ul>
+                  </div>
+                )}
+
 
                 {/* Customer decision buttons */}
                 {allowDecision && (
