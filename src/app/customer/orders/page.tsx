@@ -68,16 +68,18 @@ export default function CustomerOrdersPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [actionOrderId, setActionOrderId] = useState<string | null>(null);
 
-  const loadOrders = async (currentUserId: string) => {
-    setLoadingOrders(true);
-    setMessage(null);
-
   const {
     notifications,
     unreadCount,
     loading: notificationsLoading,
     markAllRead,
   } = useNotifications("customer");
+
+  const loadOrders = async (currentUserId: string) => {
+    setLoadingOrders(true);
+    setMessage(null);
+
+
   
 
   const { data, error } = await supabase
