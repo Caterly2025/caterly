@@ -50,12 +50,12 @@ export default function CustomerInvoicesPage() {
         .select(
           `
           id,
-          order_number,
           total,
           is_paid,
           created_at,
           orders (
             id,
+            order_number,
             status,
             created_at,
             restaurants ( name ),
@@ -138,6 +138,10 @@ export default function CustomerInvoicesPage() {
               ? getRestaurantName(order.restaurants)
               : "Unknown restaurant";
 
+            const orderLabel = order
+              ? order.order_number ?? `#${order.id.slice(0, 8)}`
+              : "Unknown order";
+
             return (
               <div
                 key={inv.id}
@@ -163,8 +167,8 @@ export default function CustomerInvoicesPage() {
                     </div>
                     {order && (
                       <div style={{ fontSize: "0.85rem", marginTop: 4 }}>
-                        Order:{" "}
-                        <strong> {order.order_number ?? `#${order.id.slice(0, 8)}`} </strong>{" "} ({order.status})
+                        Order: <strong>{orderLabel}</strong>{" "}
+                        ({order.status})
                       </div>
                     )}
                     <div style={{ fontSize: "0.85rem", marginTop: 4 }}>
