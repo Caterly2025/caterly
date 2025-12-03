@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useSupabaseUser } from "@/hooks/useSupabaseUser";
+import { useNotifications } from "@/hooks/useNotifications";
+
 
 type OrderStatusHistoryRow = {
   id: string;
@@ -69,6 +71,14 @@ export default function CustomerOrdersPage() {
   const loadOrders = async (currentUserId: string) => {
     setLoadingOrders(true);
     setMessage(null);
+
+  const {
+    notifications,
+    unreadCount,
+    loading: notificationsLoading,
+    markAllRead,
+  } = useNotifications("customer");
+  
 
   const { data, error } = await supabase
     .from("orders")
@@ -200,6 +210,77 @@ export default function CustomerOrdersPage() {
   return (
     <div style={{ maxWidth: 1000, margin: "0 auto" }}>
       <h1>My Orders</h1>
+
+      {/* Notifications for customer */}
+      <div
+        style={{
+          marginBottom: "0.75rem",
+          padding: "0.5rem 0.75rem",
+          border: "1px solid #e5e7eb",
+          borderRadius: 6,
+          background: "#f9fafb",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: "0.25rem",
+          }}
+        >
+          <div>
+            <strong>Updates on your orders</strong>{" "}
+            <span style={{ fontSize: "0.85rem", color: "#6b7280" }}>
+              {notificationsLoading
+                ? "(loading...)"
+                : unreadCount > 0
+                ? `(${unreadCount} unread)`
+                : "(no unread)"}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={markAllRead}
+            disabled={unreadCount === 0}
+            style={{ fontSize: "0.8rem" }}
+          >
+            Mark all read
+          </button>
+        </div>
+
+        {notifications.length === 0 ? (
+          <div style={{ fontSize: "0.85rem", color: "#6b7280" }}>
+            No updates yet.
+          </div>
+        ) : (
+          <ul
+            style={{
+              listStyle: "none",
+              padding: 0,
+              margin: 0,
+              maxHeight: 120,
+              overflowY: "auto",
+              fontSize: "0.85rem",
+            }}
+          >
+            {notifications.slice(0, 5).map((n) => (
+              <li
+                key={n.id}
+                style={{
+                  padding: "2px 0",
+                  opacity: n.is_read ? 0.6 : 1,
+                }}
+              >
+                <span>
+                  {new Date(n.created_at).toLocaleString()} – {n.message}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
 
       {message && (
         <div

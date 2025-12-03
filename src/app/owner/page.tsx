@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useSupabaseUser } from "@/hooks/useSupabaseUser";
+import { useNotifications } from "@/hooks/useNotifications";
 
 type OrderItemRow = {
   id: string;
@@ -53,7 +54,6 @@ type Restaurant = {
 
 
 
-
 const STATUS_OPTIONS = [
   { value: "all", label: "All statuses" },
   { value: "pending", label: "Pending owner review" },
@@ -79,6 +79,7 @@ const REFRESH_INTERVAL_OPTIONS = [
   { value: 900, label: "Every 15 minutes" },
   { value: 3600, label: "Every 1 hour" },
 ];
+
 
 const formatStatus = (status: string) => {
   switch (status) {
@@ -155,6 +156,13 @@ export default function OwnerPage() {
   // Auto-refresh (seconds)
   const [refreshIntervalSec, setRefreshIntervalSec] = useState<number>(300);
 
+  const {
+    notifications,
+    unreadCount,
+    loading: notificationsLoading,
+    markAllRead,
+  } = useNotifications("owner");
+    
   // ─────────────────────────────────────
   // Load restaurants owned by this user
   // ─────────────────────────────────────
@@ -248,6 +256,7 @@ export default function OwnerPage() {
       }
     }
 
+    
     const { data, error } = await query;
 
     if (error) {
@@ -446,6 +455,76 @@ export default function OwnerPage() {
   return (
     <div style={{ maxWidth: 1100, margin: "0 auto" }}>
       <h1>Owner View – Caterly</h1>
+      
+      {/* Notifications for owner */}
+      <div
+        style={{
+          marginBottom: "1rem",
+          padding: "0.5rem 0.75rem",
+          border: "1px solid #e5e7eb",
+          borderRadius: 6,
+          background: "#f9fafb",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: "0.25rem",
+          }}
+        >
+          <div>
+            <strong>Notifications</strong>{" "}
+            <span style={{ fontSize: "0.85rem", color: "#6b7280" }}>
+              {notificationsLoading
+                ? "(loading...)"
+                : unreadCount > 0
+                ? `(${unreadCount} unread)`
+                : "(no unread)"}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={markAllRead}
+            disabled={unreadCount === 0}
+            style={{ fontSize: "0.8rem" }}
+          >
+            Mark all read
+          </button>
+        </div>
+
+        {notifications.length === 0 ? (
+          <div style={{ fontSize: "0.85rem", color: "#6b7280" }}>
+            No notifications yet.
+          </div>
+        ) : (
+          <ul
+            style={{
+              listStyle: "none",
+              padding: 0,
+              margin: 0,
+              maxHeight: 150,
+              overflowY: "auto",
+              fontSize: "0.85rem",
+            }}
+          >
+            {notifications.slice(0, 10).map((n) => (
+              <li
+                key={n.id}
+                style={{
+                  padding: "2px 0",
+                  opacity: n.is_read ? 0.6 : 1,
+                }}
+              >
+                <span>
+                  {new Date(n.created_at).toLocaleString()} – {n.message}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
       {message && (
         <div
