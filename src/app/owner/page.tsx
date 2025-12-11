@@ -479,6 +479,25 @@ export default function OwnerPage() {
       <div style={{ maxWidth: 1100, margin: "0 auto" }}>
         <h1 className="page-title">Owner View – Caterly</h1>
 
+        {/* Manage employees */}
+                <div className="card" style={{ marginBottom: "1rem" }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "0.25rem",
+              flexWrap: "wrap",
+              gap: "0.5rem",
+            }}
+          >
+            
+            <strong>Employee Management</strong>            
+          <a href="/owner/employees">Manage Employees</a>
+          <hr />
+          </div>
+
+
         {/* Notifications */}
         <div className="card" style={{ marginBottom: "1rem" }}>
           <div
