@@ -5,6 +5,12 @@ import { supabase } from "@/lib/supabaseClient";
 import { useSupabaseUser } from "@/hooks/useSupabaseUser";
 import { useNotifications } from "@/hooks/useNotifications";
 
+// ---- Types ----
+
+type RestaurantRef =
+  | { name: string }
+  | { name: string }[]
+  | null;
 
 type OrderStatusHistoryRow = {
   id: string;
@@ -17,7 +23,7 @@ type OrderStatusHistoryRow = {
 type OrderItemRow = {
   id: string;
   quantity: number;
-  price: number;
+  price: number | null;
   menu_items:
     | { name: string }
     | { name: string }[]
@@ -31,27 +37,23 @@ type OrderRow = {
   special_request: string | null;
   total: number | null;
   created_at: string;
-  restaurants:
-    | { name: string }
-    | { name: string }[]
-    | null;
+  restaurants: RestaurantRef;
   order_items: OrderItemRow[];
   order_status_history: OrderStatusHistoryRow[];
 };
 
-
-
+// ---- Helpers ----
 
 const formatStatus = (status: string) => {
   switch (status) {
     case "pending":
       return "Pending owner review";
     case "owner_review":
-      return "Approved by owner";
+      return "Reviewed by owner";
     case "changes_requested":
-      return "Changes requested by owner";
+      return "Changes requested";
     case "customer_accepted":
-      return "Accepted by you";
+      return "Accepted by customer";
     case "completed":
       return "Completed";
     case "cancelled":
@@ -60,6 +62,88 @@ const formatStatus = (status: string) => {
       return status;
   }
 };
+
+const getRestaurantName = (r: RestaurantRef): string => {
+  if (!r) return "Unknown restaurant";
+  if (Array.isArray(r)) return r[0]?.name ?? "Unknown restaurant";
+  return r.name;
+};
+
+const getMenuItemName = (
+  m: OrderItemRow["menu_items"]
+): string => {
+  if (!m) return "Unknown item";
+  if (Array.isArray(m)) return m[0]?.name ?? "Unknown item";
+  return m.name;
+};
+
+const getNotificationIcon = (event: string) => {
+  switch (event) {
+    case "pending":
+      return "🕒"; // new order / waiting
+    case "owner_review":
+      return "👀"; // reviewed by owner
+    case "changes_requested":
+      return "✏️"; // changes requested
+    case "customer_accepted":
+      return "✅"; // accepted by customer
+    case "completed":
+      return "🏁"; // completed
+    case "cancelled":
+      return "❌"; // cancelled
+    default:
+      return "ℹ️"; // generic info
+  }
+};
+
+const renderStatusBadge = (status: string) => {
+  let bg = "#e5e7eb";
+  let color = "#111827";
+
+  switch (status) {
+    case "pending":
+      bg = "#fef3c7";
+      color = "#92400e";
+      break;
+    case "owner_review":
+      bg = "#dcfce7";
+      color = "#166534";
+      break;
+    case "changes_requested":
+      bg = "#fce7f3";
+      color = "#9d174d";
+      break;
+    case "customer_accepted":
+      bg = "#dbeafe";
+      color = "#1d4ed8";
+      break;
+    case "completed":
+      bg = "#e5e7eb";
+      color = "#111827";
+      break;
+    case "cancelled":
+      bg = "#fee2e2";
+      color = "#b91c1c";
+      break;
+  }
+
+  return (
+    <span
+      style={{
+        padding: "4px 10px",
+        borderRadius: 999,
+        fontSize: "0.75rem",
+        fontWeight: 600,
+        background: bg,
+        color,
+      }}
+    >
+      {formatStatus(status)}
+    </span>
+  );
+};
+
+// ---- Component ----
 
 export default function CustomerOrdersPage() {
   const { user, loading: authLoading } = useSupabaseUser();
@@ -76,122 +160,101 @@ export default function CustomerOrdersPage() {
     markAllRead,
   } = useNotifications("customer");
 
+  // Shared fetch logic so we can reuse after actions
   const loadOrders = async (currentUserId: string) => {
     setLoadingOrders(true);
     setMessage(null);
 
-
-  
-
-  const { data, error } = await supabase
-    .from("orders")
-    .select(
+    const { data, error } = await supabase
+      .from("orders")
+      .select(
+        `
+        id,
+        order_number,
+        status,
+        special_request,
+        total,
+        created_at,
+        restaurants ( name ),
+        order_items (
+          id,
+          quantity,
+          price,
+          menu_items ( name )
+        ),
+        order_status_history (
+          id,
+          old_status,
+          new_status,
+          changed_by,
+          changed_at
+        )
       `
-      id,
-      order_number,
-      status,
-      special_request,
-      total,
-      created_at,
-      restaurants ( name ),
-      order_items (
-        id,
-        quantity,
-        price,
-        menu_items ( name )
-      ),
-      order_status_history (
-        id,
-        old_status,
-        new_status,
-        changed_by,
-        changed_at
       )
-    `
-    )
-    .eq("customer_id", currentUserId)
-    .order("created_at", { ascending: false });
-
+      .eq("customer_id", currentUserId)
+      .order("created_at", { ascending: false });
 
     if (error) {
-      console.error(error);
+      console.error("Error loading orders:", error);
       setMessage("Error loading your orders.");
+      setOrders([]);
       setLoadingOrders(false);
       return;
     }
 
-    setOrders((data || []) as unknown as OrderRow[]);
+    setOrders((data || []) as OrderRow[]);
     setLoadingOrders(false);
   };
 
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
+      setOrders([]);
       setLoadingOrders(false);
       return;
     }
     void loadOrders(user.id);
   }, [authLoading, user]);
 
-  const getRestaurantName = (r: OrderRow["restaurants"]) => {
-    if (!r) return "Unknown restaurant";
-    if (Array.isArray(r)) return r[0]?.name ?? "Unknown restaurant";
-    return r.name;
-  };
-
-  const getItemName = (m: OrderItemRow["menu_items"]) => {
-    if (!m) return "Unknown item";
-    if (Array.isArray(m)) return m[0]?.name ?? "Unknown item";
-    return m.name;
-  };
-
-  const acceptOrder = async (orderId: string) => {
+  const handleAcceptChanges = async (orderId: string) => {
     if (!user) return;
-
     setActionOrderId(orderId);
     setMessage(null);
 
     const { error } = await supabase
       .from("orders")
       .update({ status: "customer_accepted" })
-      .eq("id", orderId)
-      .eq("customer_id", user.id); // extra safety
+      .eq("id", orderId);
 
     if (error) {
-      console.error(error);
-      setMessage("Failed to accept the order.");
-    } else {
-      setMessage("Order accepted. The restaurant can now generate an invoice.");
-      await loadOrders(user.id);
-    }
-
-    setActionOrderId(null);
-  };
-
-  const cancelOrder = async (orderId: string) => {
-    if (!user) return;
-
-    if (!window.confirm("Are you sure you want to cancel this order?")) {
+      console.error("Error accepting order changes:", error);
+      setMessage("Error accepting changes. Please try again.");
+      setActionOrderId(null);
       return;
     }
 
+    await loadOrders(user.id);
+    setActionOrderId(null);
+  };
+
+  const handleCancelOrder = async (orderId: string) => {
+    if (!user) return;
     setActionOrderId(orderId);
     setMessage(null);
 
     const { error } = await supabase
       .from("orders")
       .update({ status: "cancelled" })
-      .eq("id", orderId)
-      .eq("customer_id", user.id);
+      .eq("id", orderId);
 
     if (error) {
-      console.error(error);
-      setMessage("Failed to cancel the order.");
-    } else {
-      setMessage("Order cancelled.");
-      await loadOrders(user.id);
+      console.error("Error cancelling order:", error);
+      setMessage("Error cancelling order. Please try again.");
+      setActionOrderId(null);
+      return;
     }
 
+    await loadOrders(user.id);
     setActionOrderId(null);
   };
 
@@ -201,292 +264,385 @@ export default function CustomerOrdersPage() {
 
   if (!user) {
     return (
-      <div style={{ maxWidth: 800, margin: "0 auto" }}>
-        <h1>My Orders – Caterly</h1>
-        <p>You must be logged in to see your orders.</p>
-        <p>
-          Go to <a href="/auth">Auth</a> to login or sign up.
-        </p>
+      <div className="page">
+        <div style={{ maxWidth: 800, margin: "0 auto" }}>
+          <div className="card">
+            <h1 className="page-title">My Orders – Caterly</h1>
+            <p className="page-subtitle">
+              You must be logged in to see your orders.
+            </p>
+            <p>
+              Go to <a href="/auth">Auth</a> to login or sign up.
+            </p>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div style={{ maxWidth: 1000, margin: "0 auto" }}>
-      <h1>My Orders</h1>
+    <div className="page">
+      <div style={{ maxWidth: 1000, margin: "0 auto" }}>
+        <h1 className="page-title">My Orders</h1>
 
-      {/* Notifications for customer */}
-      <div
-        style={{
-          marginBottom: "0.75rem",
-          padding: "0.5rem 0.75rem",
-          border: "1px solid #e5e7eb",
-          borderRadius: 6,
-          background: "#f9fafb",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "0.25rem",
-          }}
-        >
-          <div>
-            <strong>Updates on your orders</strong>{" "}
-            <span style={{ fontSize: "0.85rem", color: "#6b7280" }}>
-              {notificationsLoading
-                ? "(loading...)"
-                : unreadCount > 0
-                ? `(${unreadCount} unread)`
-                : "(no unread)"}
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={markAllRead}
-            disabled={unreadCount === 0}
-            style={{ fontSize: "0.8rem" }}
-          >
-            Mark all read
-          </button>
-        </div>
-
-        {notifications.length === 0 ? (
-          <div style={{ fontSize: "0.85rem", color: "#6b7280" }}>
-            No updates yet.
-          </div>
-        ) : (
-          <ul
+        {/* Notifications box */}
+        <div className="card" style={{ marginBottom: "1rem" }}>
+          <div
             style={{
-              listStyle: "none",
-              padding: 0,
-              margin: 0,
-              maxHeight: 120,
-              overflowY: "auto",
-              fontSize: "0.85rem",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "0.25rem",
+              gap: "0.5rem",
+              flexWrap: "wrap",
             }}
           >
-            {notifications.slice(0, 5).map((n) => (
-              <li
-                key={n.id}
-                style={{
-                  padding: "2px 0",
-                  opacity: n.is_read ? 0.6 : 1,
-                }}
-              >
-                <span>
-                  {new Date(n.created_at).toLocaleString()} – {n.message}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+            <div>
+              <strong>Updates on your orders</strong>{" "}
+              <span style={{ fontSize: "0.85rem", color: "#6b7280" }}>
+                {notificationsLoading
+                  ? "(loading...)"
+                  : unreadCount > 0
+                  ? `(${unreadCount} unread)`
+                  : "(no unread)"}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={markAllRead}
+              disabled={unreadCount === 0}
+              className="btn btn-secondary"
+              style={{ fontSize: "0.8rem" }}
+            >
+              Mark all read
+            </button>
+          </div>
 
-
-      {message && (
-        <div
-          style={{
-            background: "#e0f2fe",
-            border: "1px solid #bae6fd",
-            padding: "0.5rem 1rem",
-            marginBottom: "1rem",
-            borderRadius: 4,
-          }}
-        >
-          {message}
-        </div>
-      )}
-
-      {loadingOrders ? (
-        <p>Loading your orders...</p>
-      ) : orders.length === 0 ? (
-        <p>You haven’t placed any orders yet.</p>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-          {orders.map((order) => {
-            const allowDecision =
-              order.status === "owner_review" ||
-              order.status === "changes_requested";
-
-            return (
-              <div
-                key={order.id}
-                style={{
-                  border: "1px solid #ddd",
-                  borderRadius: 6,
-                  padding: "1rem",
-                  background: "white",
-                }}
-              >
-                <div
+          {notifications.length === 0 ? (
+            <div style={{ fontSize: "0.85rem", color: "#6b7280" }}>
+              No updates yet.
+            </div>
+          ) : (
+            <ul
+              style={{
+                listStyle: "none",
+                padding: 0,
+                margin: 0,
+                maxHeight: 150,
+                overflowY: "auto",
+                fontSize: "0.85rem",
+              }}
+            >
+              {notifications.slice(0, 5).map((n) => (
+                <li
+                  key={n.id}
                   style={{
+                    padding: "2px 0",
+                    opacity: n.is_read ? 0.6 : 1,
                     display: "flex",
-                    justifyContent: "space-between",
-                    marginBottom: 8,
+                    alignItems: "center",
+                    gap: "0.35rem",
                   }}
                 >
-                  <div>
-                    <strong>  Order {order.order_number ?? `#${order.id.slice(0, 8)}`} </strong>
+                  <span>{getNotificationIcon(n.event)}</span>
+                  <span>
+                    {new Date(n.created_at).toLocaleString()} – {n.message}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
 
-                    <div style={{ fontSize: "0.8rem", color: "#666" }}>
-                      Placed at:{" "}
-                      {new Date(order.created_at).toLocaleString()}
-                    </div>
-                    <div style={{ fontSize: "0.9rem", marginTop: 4 }}>
-                      Restaurant:{" "}
-                      <strong>{getRestaurantName(order.restaurants)}</strong>
-                    </div>
-                  </div>
-                  <div style={{ textAlign: "right" }}>
-                    <div>
-                      <span>Status: </span>
-                      <strong>{formatStatus(order.status)}</strong>
-                    </div>
-                    {order.total != null && (
-                      <div style={{ marginTop: 4 }}>
-                        <strong>Total: ${order.total.toFixed(2)}</strong>
-                      </div>
-                    )}
-                  </div>
-                </div>
+        {message && (
+          <div className="alert alert-error">{message}</div>
+        )}
 
-                {order.special_request && (
-                  <div style={{ marginBottom: 8 }}>
-                    <strong>Your special request:</strong>{" "}
-                    {order.special_request}
-                  </div>
-                )}
+        {loadingOrders ? (
+          <p>Loading your orders...</p>
+        ) : orders.length === 0 ? (
+          <p>You don’t have any orders yet.</p>
+        ) : (
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "1rem",
+            }}
+          >
+            {orders.map((order) => {
+              const restaurantName = getRestaurantName(order.restaurants);
+              const orderLabel =
+                order.order_number ?? `#${order.id.slice(0, 8)}`;
 
-                <table
-                  style={{
-                    width: "100%",
-                    borderCollapse: "collapse",
-                    marginBottom: 8,
-                  }}
-                >
-                  <thead>
-                    <tr>
-                      <th
-                        style={{
-                          textAlign: "left",
-                          borderBottom: "1px solid #ddd",
-                        }}
-                      >
-                        Item
-                      </th>
-                      <th
-                        style={{
-                          textAlign: "right",
-                          borderBottom: "1px solid #ddd",
-                        }}
-                      >
-                        Qty
-                      </th>
-                      <th
-                        style={{
-                          textAlign: "right",
-                          borderBottom: "1px solid #ddd",
-                        }}
-                      >
-                        Price
-                      </th>
-                      <th
-                        style={{
-                          textAlign: "right",
-                          borderBottom: "1px solid #ddd",
-                        }}
-                      >
-                        Line Total
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {order.order_items?.map((oi) => (
-                      <tr key={oi.id}>
-                        <td style={{ padding: "4px 0" }}>
-                          {getItemName(oi.menu_items)}
-                        </td>
-                        <td style={{ padding: "4px 0", textAlign: "right" }}>
-                          {oi.quantity}
-                        </td>
-                        <td style={{ padding: "4px 0", textAlign: "right" }}>
-                          ${oi.price.toFixed(2)}
-                        </td>
-                        <td style={{ padding: "4px 0", textAlign: "right" }}>
-                          {(oi.price * oi.quantity).toFixed(2)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-
-
-                {/* Status history timeline */}
-                {order.order_status_history && order.order_status_history.length > 0 && (
-                  <div style={{ marginTop: 6, fontSize: "0.85rem" }}>
-                    <strong>Status history:</strong>
-                    <ul style={{ margin: "4px 0 0 0", paddingLeft: "1.1rem" }}>
-                      {[...order.order_status_history]
-                        .sort(
-                          (a, b) =>
-                            new Date(a.changed_at).getTime() -
-                            new Date(b.changed_at).getTime()
-                        )
-                        .map((h) => (
-                          <li key={h.id}>
-                            <span>
-                              {new Date(h.changed_at).toLocaleString()} –{" "}
-                              {h.old_status
-                                ? `${formatStatus(h.old_status)} → `
-                                : ""}
-                              <strong>{formatStatus(h.new_status)}</strong>
-                            </span>
-                          </li>
-                        ))}
-                    </ul>
-                  </div>
-                )}
-
-
-                {/* Customer decision buttons */}
-                {allowDecision && (
+              return (
+                <div key={order.id} className="card">
+                  {/* Header row */}
                   <div
                     style={{
                       display: "flex",
-                      justifyContent: "flex-end",
-                      gap: "0.5rem",
-                      marginTop: 8,
+                      justifyContent: "space-between",
+                      gap: "0.75rem",
                       flexWrap: "wrap",
+                      marginBottom: "0.5rem",
                     }}
                   >
-                    <button
-                      type="button"
-                      onClick={() => acceptOrder(order.id)}
-                      disabled={actionOrderId === order.id}
-                    >
-                      {actionOrderId === order.id
-                        ? "Accepting..."
-                        : "Accept final order"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => cancelOrder(order.id)}
-                      disabled={actionOrderId === order.id}
-                    >
-                      {actionOrderId === order.id
-                        ? "Cancelling..."
-                        : "Cancel order"}
-                    </button>
+                    <div>
+                      <div
+                        style={{
+                          display: "flex",
+                          flexWrap: "wrap",
+                          gap: "0.5rem",
+                          alignItems: "center",
+                        }}
+                      >
+                        <strong>Order {orderLabel}</strong>
+                        {renderStatusBadge(order.status)}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: "0.8rem",
+                          color: "#6b7280",
+                          marginTop: 2,
+                        }}
+                      >
+                        Placed:{" "}
+                        {new Date(
+                          order.created_at
+                        ).toLocaleString()}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: "0.85rem",
+                          marginTop: 4,
+                        }}
+                      >
+                        Restaurant:{" "}
+                        <strong>{restaurantName}</strong>
+                      </div>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <div
+                        style={{
+                          fontSize: "0.9rem",
+                          fontWeight: 600,
+                        }}
+                      >
+                        Total: $
+                        {order.total?.toFixed(2) ?? "0.00"}
+                      </div>
+                    </div>
                   </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
+
+                  {/* Special request */}
+                  {order.special_request && (
+                    <div
+                      style={{
+                        fontSize: "0.85rem",
+                        marginBottom: "0.5rem",
+                        color: "#374151",
+                      }}
+                    >
+                      <strong>Special request: </strong>
+                      {order.special_request}
+                    </div>
+                  )}
+
+                  {/* Items table */}
+                  <table
+                    style={{
+                      width: "100%",
+                      borderCollapse: "collapse",
+                      fontSize: "0.9rem",
+                      marginTop: "0.25rem",
+                    }}
+                  >
+                    <thead>
+                      <tr>
+                        <th
+                          style={{
+                            textAlign: "left",
+                            paddingBottom: 4,
+                            borderBottom: "1px solid #e5e7eb",
+                          }}
+                        >
+                          Item
+                        </th>
+                        <th
+                          style={{
+                            textAlign: "center",
+                            paddingBottom: 4,
+                            borderBottom: "1px solid #e5e7eb",
+                          }}
+                        >
+                          Qty
+                        </th>
+                        <th
+                          style={{
+                            textAlign: "right",
+                            paddingBottom: 4,
+                            borderBottom: "1px solid #e5e7eb",
+                          }}
+                        >
+                          Price
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {order.order_items.map((item) => (
+                        <tr key={item.id}>
+                          <td
+                            style={{
+                              paddingTop: 4,
+                              paddingBottom: 4,
+                            }}
+                          >
+                            {getMenuItemName(item.menu_items)}
+                          </td>
+                          <td
+                            style={{
+                              textAlign: "center",
+                              paddingTop: 4,
+                              paddingBottom: 4,
+                            }}
+                          >
+                            {item.quantity}
+                          </td>
+                          <td
+                            style={{
+                              textAlign: "right",
+                              paddingTop: 4,
+                              paddingBottom: 4,
+                            }}
+                          >
+                            $
+                            {item.price != null
+                              ? item.price.toFixed(2)
+                              : "0.00"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+
+                  {/* Status history timeline */}
+                  {order.order_status_history &&
+                    order.order_status_history.length >
+                      0 && (
+                      <div
+                        style={{
+                          marginTop: 8,
+                          fontSize: "0.85rem",
+                        }}
+                      >
+                        <strong>Status history:</strong>
+                        <ul
+                          style={{
+                            margin: "4px 0 0 0",
+                            paddingLeft: "1.1rem",
+                          }}
+                        >
+                          {[...order.order_status_history]
+                            .sort(
+                              (a, b) =>
+                                new Date(
+                                  a.changed_at
+                                ).getTime() -
+                                new Date(
+                                  b.changed_at
+                                ).getTime()
+                            )
+                            .map((h) => (
+                              <li key={h.id}>
+                                {new Date(
+                                  h.changed_at
+                                ).toLocaleString()}{" "}
+                                –{" "}
+                                {h.old_status
+                                  ? `${formatStatus(
+                                      h.old_status
+                                    )} → `
+                                  : ""}
+                                <strong>
+                                  {formatStatus(
+                                    h.new_status
+                                  )}
+                                </strong>
+                              </li>
+                            ))}
+                        </ul>
+                      </div>
+                    )}
+
+                  {/* Action buttons */}
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: "0.75rem",
+                      marginTop: "0.75rem",
+                    }}
+                  >
+                    {order.status === "changes_requested" && (
+                      <>
+                        <button
+                          className="btn btn-primary"
+                          onClick={() =>
+                            handleAcceptChanges(
+                              order.id
+                            )
+                          }
+                          disabled={
+                            actionOrderId === order.id
+                          }
+                        >
+                          {actionOrderId === order.id
+                            ? "Accepting..."
+                            : "Accept Changes"}
+                        </button>
+
+                        <button
+                          className="btn btn-danger"
+                          onClick={() =>
+                            handleCancelOrder(
+                              order.id
+                            )
+                          }
+                          disabled={
+                            actionOrderId === order.id
+                          }
+                        >
+                          {actionOrderId === order.id
+                            ? "Cancelling..."
+                            : "Cancel Order"}
+                        </button>
+                      </>
+                    )}
+
+                    {order.status === "pending" && (
+                      <button
+                        className="btn btn-danger"
+                        onClick={() =>
+                          handleCancelOrder(
+                            order.id
+                          )
+                        }
+                        disabled={
+                          actionOrderId === order.id
+                        }
+                      >
+                        {actionOrderId === order.id
+                          ? "Cancelling..."
+                          : "Cancel Order"}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

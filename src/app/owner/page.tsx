@@ -5,17 +5,28 @@ import { supabase } from "@/lib/supabaseClient";
 import { useSupabaseUser } from "@/hooks/useSupabaseUser";
 import { useNotifications } from "@/hooks/useNotifications";
 
+// -------- Types --------
+
+type RestaurantRef =
+  | { id: string; name: string }
+  | { id: string; name: string }[]
+  | null;
+
+type OrderStatusHistoryRow = {
+  id: string;
+  old_status: string | null;
+  new_status: string;
+  changed_by: string | null;
+  changed_at: string;
+};
+
 type OrderItemRow = {
   id: string;
   quantity: number;
-  price: number;
+  price: number | null;
   menu_items:
-    | {
-        name: string;
-      }
-    | {
-        name: string;
-      }[]
+    | { name: string }
+    | { name: string }[]
     | null;
 };
 
@@ -26,14 +37,6 @@ type InvoiceRow = {
   created_at: string;
 };
 
-type OrderStatusHistoryRow = {
-  id: string;
-  old_status: string | null;
-  new_status: string;
-  changed_by: string | null;
-  changed_at: string;
-};
-
 type OrderRow = {
   id: string;
   order_number: string | null;
@@ -41,54 +44,31 @@ type OrderRow = {
   special_request: string | null;
   total: number | null;
   created_at: string;
+  restaurants: RestaurantRef;
   order_items: OrderItemRow[];
   invoices: InvoiceRow[];
   order_status_history: OrderStatusHistoryRow[];
 };
 
+// -------- Helpers --------
 
-type Restaurant = {
-  id: string;
-  name: string;
-  description: string | null;
-};
+const ALL_STATUSES = [
+  "pending",
+  "owner_review",
+  "changes_requested",
+  "customer_accepted",
+  "completed",
+  "cancelled",
+] as const;
 
-
-
-
-const STATUS_OPTIONS = [
-  { value: "all", label: "All statuses" },
-  { value: "pending", label: "Pending owner review" },
-  { value: "owner_review", label: "Approved by owner" },
-  { value: "changes_requested", label: "Changes requested" },
-  { value: "customer_accepted", label: "Accepted by customer" },
-  { value: "completed", label: "Completed" },
-  { value: "cancelled", label: "Cancelled" },
-];
-
-const DATE_RANGE_OPTIONS = [
-  { value: "all", label: "All dates" },
-  { value: "today", label: "Today" },
-  { value: "last7", label: "Last 7 days" },
-  { value: "last30", label: "Last 30 days" },
-];
-
-const REFRESH_INTERVAL_OPTIONS = [
-  { value: 15, label: "Every 15 seconds" },
-  { value: 30, label: "Every 30 seconds" },
-  { value: 60, label: "Every 1 minute" },
-  { value: 300, label: "Every 5 minutes" },
-  { value: 900, label: "Every 15 minutes" },
-  { value: 3600, label: "Every 1 hour" },
-];
-
+type StatusType = (typeof ALL_STATUSES)[number];
 
 const formatStatus = (status: string) => {
   switch (status) {
     case "pending":
       return "Pending owner review";
     case "owner_review":
-      return "Approved by owner";
+      return "Reviewed by owner";
     case "changes_requested":
       return "Changes requested";
     case "customer_accepted":
@@ -102,61 +82,214 @@ const formatStatus = (status: string) => {
   }
 };
 
-const formatDateLabel = (iso: string) => {
-  const d = new Date(iso);
-  const today = new Date();
-  const sameDay =
-    d.getFullYear() === today.getFullYear() &&
-    d.getMonth() === today.getMonth() &&
-    d.getDate() === today.getDate();
+const renderStatusBadge = (status: string) => {
+  let bg = "#e5e7eb";
+  let color = "#111827";
 
-  if (sameDay) {
-    return `Today – ${d.toLocaleDateString()}`;
+  switch (status) {
+    case "pending":
+      bg = "#fef3c7";
+      color = "#92400e";
+      break;
+    case "owner_review":
+      bg = "#dcfce7";
+      color = "#166534";
+      break;
+    case "changes_requested":
+      bg = "#fce7f3";
+      color = "#9d174d";
+      break;
+    case "customer_accepted":
+      bg = "#dbeafe";
+      color = "#1d4ed8";
+      break;
+    case "completed":
+      bg = "#e5e7eb";
+      color = "#111827";
+      break;
+    case "cancelled":
+      bg = "#fee2e2";
+      color = "#b91c1c";
+      break;
   }
 
-  return d.toLocaleDateString();
+  return (
+    <span
+      style={{
+        padding: "4px 10px",
+        borderRadius: 999,
+        fontSize: "0.75rem",
+        fontWeight: 600,
+        background: bg,
+        color,
+      }}
+    >
+      {formatStatus(status)}
+    </span>
+  );
 };
 
-const getDateFromFilter = (range: string) => {
-  const now = new Date();
-  const start = new Date(now);
+const getRestaurantName = (r: RestaurantRef): { id: string | null; name: string } => {
+  if (!r) return { id: null, name: "Unknown restaurant" };
+  if (Array.isArray(r)) {
+    const first = r[0];
+    if (!first) return { id: null, name: "Unknown restaurant" };
+    return { id: first.id, name: first.name };
+  }
+  return { id: r.id, name: r.name };
+};
 
-  switch (range) {
-    case "today": {
-      start.setHours(0, 0, 0, 0);
-      return start.toISOString();
-    }
-    case "last7": {
-      start.setDate(start.getDate() - 7);
-      return start.toISOString();
-    }
-    case "last30": {
-      start.setDate(start.getDate() - 30);
-      return start.toISOString();
-    }
+const getMenuItemName = (
+  m: OrderItemRow["menu_items"]
+): string => {
+  if (!m) return "Unknown item";
+  if (Array.isArray(m)) return m[0]?.name ?? "Unknown item";
+  return m.name;
+};
+
+const getNotificationIcon = (event: string) => {
+  switch (event) {
+    case "pending":
+      return "🕒"; // new order / waiting
+    case "owner_review":
+      return "👀"; // reviewed by owner
+    case "changes_requested":
+      return "✏️"; // changes requested
+    case "customer_accepted":
+      return "✅"; // accepted by customer
+    case "completed":
+      return "🏁"; // completed
+    case "cancelled":
+      return "❌"; // cancelled
     default:
-      return null; // all dates
+      return "ℹ️";
   }
 };
+
+// Date range helper
+type DateRangeFilter = "all" | "today" | "last7" | "last30";
+
+const isWithinRange = (createdAt: string, range: DateRangeFilter): boolean => {
+  if (range === "all") return true;
+
+  const created = new Date(createdAt);
+  const now = new Date();
+
+  if (range === "today") {
+    return (
+      created.getFullYear() === now.getFullYear() &&
+      created.getMonth() === now.getMonth() &&
+      created.getDate() === now.getDate()
+    );
+  }
+
+  const diffMs = now.getTime() - created.getTime();
+  const diffDays = diffMs / (1000 * 60 * 60 * 24);
+
+  if (range === "last7") return diffDays <= 7;
+  if (range === "last30") return diffDays <= 30;
+
+  return true;
+};
+
+// Group by Restaurant -> Day -> Status
+type GroupedOrders = {
+  restaurantId: string | null;
+  restaurantName: string;
+  days: {
+    dayKey: string; // YYYY-MM-DD
+    dayLabel: string;
+    statuses: {
+      status: string;
+      orders: OrderRow[];
+    }[];
+  }[];
+};
+
+const groupOrders = (orders: OrderRow[]): GroupedOrders[] => {
+  const map = new Map<string | null, { restaurantName: string; orders: OrderRow[] }>();
+
+  for (const order of orders) {
+    const { id: restaurantId, name } = getRestaurantName(order.restaurants);
+    const key = restaurantId;
+    const entry = map.get(key);
+    if (!entry) {
+      map.set(key, { restaurantName: name, orders: [order] });
+    } else {
+      entry.orders.push(order);
+    }
+  }
+
+  const result: GroupedOrders[] = [];
+
+  for (const [restaurantId, value] of map.entries()) {
+    const dayMap = new Map<string, OrderRow[]>();
+
+    for (const order of value.orders) {
+      const d = new Date(order.created_at);
+      const dayKey = d.toISOString().slice(0, 10); // YYYY-MM-DD
+      const arr = dayMap.get(dayKey);
+      if (!arr) {
+        dayMap.set(dayKey, [order]);
+      } else {
+        arr.push(order);
+      }
+    }
+
+    const days = Array.from(dayMap.entries())
+      .sort((a, b) => (a[0] < b[0] ? 1 : -1)) // latest date first
+      .map(([dayKey, dayOrders]) => {
+        // group by status
+        const statusMap = new Map<string, OrderRow[]>();
+        for (const o of dayOrders) {
+          const s = o.status;
+          const arr = statusMap.get(s);
+          if (!arr) statusMap.set(s, [o]);
+          else arr.push(o);
+        }
+
+        const statuses = Array.from(statusMap.entries())
+          .sort((a, b) => a[0].localeCompare(b[0]))
+          .map(([status, stsOrders]) => ({
+            status,
+            orders: stsOrders,
+          }));
+
+        const dateLabel = new Date(dayKey + "T00:00:00Z").toLocaleDateString();
+
+        return {
+          dayKey,
+          dayLabel: dateLabel,
+          statuses,
+        };
+      });
+
+    result.push({
+      restaurantId,
+      restaurantName: value.restaurantName,
+      days,
+    });
+  }
+
+  // sort restaurants by name
+  result.sort((a, b) => a.restaurantName.localeCompare(b.restaurantName));
+
+  return result;
+};
+
+// -------- Component --------
 
 export default function OwnerPage() {
   const { user, loading: authLoading } = useSupabaseUser();
 
-  const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
-  const [selectedRestaurant, setSelectedRestaurant] =
-    useState<Restaurant | null>(null);
-
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
-  const [invoiceLoadingId, setInvoiceLoadingId] = useState<string | null>(null);
+  const [actionOrderId, setActionOrderId] = useState<string | null>(null);
 
-  // Filters
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [dateRangeFilter, setDateRangeFilter] = useState<string>("all");
-
-  // Auto-refresh (seconds)
-  const [refreshIntervalSec, setRefreshIntervalSec] = useState<number>(300);
+  const [statusFilter, setStatusFilter] = useState<"all" | StatusType>("all");
+  const [dateRange, setDateRange] = useState<DateRangeFilter>("all");
+  const [autoRefreshSec, setAutoRefreshSec] = useState<number>(300); // default 5 min
 
   const {
     notifications,
@@ -164,778 +297,746 @@ export default function OwnerPage() {
     loading: notificationsLoading,
     markAllRead,
   } = useNotifications("owner");
-    
-  // ─────────────────────────────────────
-  // Load restaurants owned by this user
-  // ─────────────────────────────────────
-  useEffect(() => {
-    const loadRestaurants = async () => {
-      if (authLoading || !user) return;
 
-      setMessage(null);
+  // ---- Load orders ----
 
-      const { data, error } = await supabase
-        .from("restaurants")
-        .select("id, name, description")
-        .eq("owner_id", user.id)
-        .order("created_at");
-
-      if (error) {
-        console.error(error);
-        setMessage("Error loading your restaurants.");
-        return;
-      }
-
-      const list = (data || []) as Restaurant[];
-      setRestaurants(list);
-
-      if (list.length > 0) {
-        setSelectedRestaurant(list[0]);
-      } else {
-        setSelectedRestaurant(null);
-        setOrders([]);
-      }
-    };
-
-    void loadRestaurants();
-  }, [authLoading, user]);
-
-  // ─────────────────────────────────────
-  // Load orders helper
-  // ─────────────────────────────────────
-  const loadOrders = async (
-    restaurantId: string,
-    currentStatusFilter: string,
-    currentDateRangeFilter: string
-  ) => {
-    if (!user || !restaurantId) return;
-
+  const loadOrders = async (ownerUserId: string) => {
     setLoadingOrders(true);
     setMessage(null);
 
-  let query = supabase
-    .from("orders")
-    .select(
-      `
-      id,
-      order_number,
-      status,
-      special_request,
-      total,
-      created_at,
-      order_items (
+    const { data, error } = await supabase
+      .from("orders")
+      .select(
+        `
         id,
-        quantity,
-        price,
-        menu_items ( name )
-      ),
-      invoices (
-        id,
+        order_number,
+        status,
+        special_request,
         total,
-        is_paid,
-        created_at
-      ),
-      order_status_history (
-        id,
-        old_status,
-        new_status,
-        changed_by,
-        changed_at
+        created_at,
+        restaurants!inner (
+          id,
+          name,
+          owner_id
+        ),
+        order_items (
+          id,
+          quantity,
+          price,
+          menu_items ( name )
+        ),
+        invoices (
+          id,
+          total,
+          is_paid,
+          created_at
+        ),
+        order_status_history (
+          id,
+          old_status,
+          new_status,
+          changed_by,
+          changed_at
+        )
+      `
       )
-    `
-    )
-
-      .eq("restaurant_id", restaurantId)
+      .eq("restaurants.owner_id", ownerUserId)
       .order("created_at", { ascending: false });
-
-    if (currentStatusFilter !== "all") {
-      query = query.eq("status", currentStatusFilter);
-    }
-
-    if (currentDateRangeFilter !== "all") {
-      const from = getDateFromFilter(currentDateRangeFilter);
-      if (from) {
-        query = query.gte("created_at", from);
-      }
-    }
-
-    
-    const { data, error } = await query;
 
     if (error) {
       console.error("Error loading orders:", error);
       setMessage("Error loading orders.");
+      setOrders([]);
       setLoadingOrders(false);
       return;
     }
 
-    setOrders((data || []) as unknown as OrderRow[]);
+    setOrders((data || []) as OrderRow[]);
     setLoadingOrders(false);
   };
 
-  // Initial + filter-driven load
+  // Initial load
   useEffect(() => {
-    if (!user || !selectedRestaurant) return;
-    void loadOrders(selectedRestaurant.id, statusFilter, dateRangeFilter);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, selectedRestaurant, statusFilter, dateRangeFilter]);
+    if (authLoading) return;
+    if (!user) {
+      setOrders([]);
+      setLoadingOrders(false);
+      return;
+    }
+    void loadOrders(user.id);
+  }, [authLoading, user]);
 
-  // Auto-refresh every N seconds
+  // Auto-refresh
   useEffect(() => {
-    if (!user || !selectedRestaurant) return;
+    if (!user) return;
+    if (!autoRefreshSec || autoRefreshSec <= 0) return;
 
-    const intervalId = setInterval(() => {
-      void loadOrders(selectedRestaurant.id, statusFilter, dateRangeFilter);
-    }, refreshIntervalSec * 1000);
+    const id = setInterval(() => {
+      void loadOrders(user.id);
+    }, autoRefreshSec * 1000);
 
-    return () => clearInterval(intervalId);
-  }, [user, selectedRestaurant, refreshIntervalSec, statusFilter, dateRangeFilter]);
+    return () => clearInterval(id);
+  }, [user, autoRefreshSec]);
 
-  const manualRefresh = () => {
-    if (!user || !selectedRestaurant) return;
-    void loadOrders(selectedRestaurant.id, statusFilter, dateRangeFilter);
-  };
+  // ---- Actions ----
 
-  // ─────────────────────────────────────
-  // Status update + invoice generation
-  // ─────────────────────────────────────
-  const updateStatus = async (orderId: string, status: string) => {
+  const updateStatus = async (orderId: string, newStatus: StatusType) => {
+    if (!user) return;
+    setActionOrderId(orderId);
     setMessage(null);
 
     const { error } = await supabase
       .from("orders")
-      .update({ status })
+      .update({ status: newStatus })
       .eq("id", orderId);
 
     if (error) {
-      console.error(error);
-      setMessage("Failed to update status.");
+      console.error("Error updating order status:", error);
+      setMessage("Error updating order status.");
+      setActionOrderId(null);
       return;
     }
 
-    setMessage("Order status updated.");
-    if (selectedRestaurant) {
-      await loadOrders(selectedRestaurant.id, statusFilter, dateRangeFilter);
-    }
+    await loadOrders(user.id);
+    setActionOrderId(null);
   };
 
   const generateInvoice = async (order: OrderRow) => {
-    if (!selectedRestaurant) return;
-
-    if (order.status !== "customer_accepted") {
-      setMessage("Invoice can only be created after customer acceptance.");
-      return;
-    }
-
-    // If an invoice already exists, do nothing
-    if (order.invoices && order.invoices.length > 0) {
-      setMessage("Invoice already exists for this order.");
-      return;
-    }
-
-    setInvoiceLoadingId(order.id);
+    if (!user) return;
+    setActionOrderId(order.id);
     setMessage(null);
 
-    try {
-      // Prefer stored total; if null, compute from items as fallback
-      const amount =
-        order.total ??
-        order.order_items.reduce(
-          (sum, oi) => sum + oi.price * oi.quantity,
-          0
-        );
-
-      const { error } = await supabase.from("invoices").insert({
-        order_id: order.id,
-        total: amount,
-        is_paid: false,
-      });
-
-      if (error) {
-        console.error("Error inserting invoice:", error);
-        setMessage("Failed to create invoice.");
-      } else {
-        setMessage("Invoice created.");
-        await loadOrders(selectedRestaurant.id, statusFilter, dateRangeFilter);
-      }
-    } catch (err) {
-      console.error(err);
-      setMessage("Unexpected error creating invoice.");
-    } finally {
-      setInvoiceLoadingId(null);
-    }
-  };
-
-  const getItemName = (m: OrderItemRow["menu_items"]) => {
-    if (!m) return "Unknown item";
-    if (Array.isArray(m)) return m[0]?.name ?? "Unknown item";
-    return m.name;
-  };
-
-  // ─────────────────────────────────────
-  // Grouping: Day → Status (restaurant is already selected)
-  // ─────────────────────────────────────
-  const grouped = useMemo(() => {
-    const byDay: Record<
-      string,
-      {
-        dateLabel: string;
-        orders: OrderRow[];
-      }
-    > = {};
-
-    for (const o of orders) {
-      const d = new Date(o.created_at);
-      const key = `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
-      if (!byDay[key]) {
-        byDay[key] = {
-          dateLabel: formatDateLabel(o.created_at),
-          orders: [],
-        };
-      }
-      byDay[key].orders.push(o);
+    const existingInvoice = order.invoices && order.invoices[0];
+    if (existingInvoice) {
+      setMessage("Invoice already exists for this order.");
+      setActionOrderId(null);
+      return;
     }
 
-    const dayEntries = Object.entries(byDay).sort(([aKey], [bKey]) =>
-      aKey < bKey ? 1 : -1
-    );
-
-    return dayEntries.map(([dayKey, { dateLabel, orders }]) => {
-      const byStatus: Record<string, OrderRow[]> = {};
-      for (const o of orders) {
-        if (!byStatus[o.status]) byStatus[o.status] = [];
-        byStatus[o.status].push(o);
-      }
-
-      const statusEntries = Object.entries(byStatus).sort(
-        ([aStatus], [bStatus]) => aStatus.localeCompare(bStatus)
-      );
-
-      return {
-        dayKey,
-        dateLabel,
-        statuses: statusEntries.map(([status, ordersInStatus]) => ({
-          status,
-          label: formatStatus(status),
-          orders: ordersInStatus,
-        })),
-      };
+    const { error } = await supabase.from("invoices").insert({
+      order_id: order.id,
+      total: order.total ?? 0,
+      is_paid: false,
     });
-  }, [orders]);
 
-  // ─────────────────────────────────────
-  // Auth gating & render
-  // ─────────────────────────────────────
+    if (error) {
+      console.error("Error creating invoice:", error);
+      setMessage("Failed to create invoice.");
+      setActionOrderId(null);
+      return;
+    }
+
+    await loadOrders(user.id);
+    setActionOrderId(null);
+  };
+
+  // ---- Auth states ----
+
   if (authLoading) {
     return <div>Checking authentication...</div>;
   }
 
   if (!user) {
     return (
-      <div style={{ maxWidth: 800, margin: "0 auto" }}>
-        <h1>Owner View – Caterly</h1>
-        <p>You must be logged in as an owner to view this page.</p>
-        <p>
-          Go to <a href="/auth">Auth</a> to login or sign up.
-        </p>
+      <div className="page">
+        <div style={{ maxWidth: 800, margin: "0 auto" }}>
+          <div className="card">
+            <h1 className="page-title">Owner View – Caterly</h1>
+            <p className="page-subtitle">
+              You must be logged in as an owner to manage orders.
+            </p>
+            <p>
+              Go to <a href="/auth/owner">Owner Auth</a> to login or sign up.
+            </p>
+          </div>
+        </div>
       </div>
     );
   }
 
-  if (!authLoading && user && restaurants.length === 0) {
-    return (
-      <div style={{ maxWidth: 800, margin: "0 auto" }}>
-        <h1>Owner View – Caterly</h1>
-        <p>You don’t have any restaurants assigned to your account yet.</p>
-        <p>
-          Use the <a href="/admin">Admin</a> page (or ask an admin) to create a
-          restaurant with <code>owner_id = {user.id}</code>.
-        </p>
-      </div>
-    );
-  }
+  // ---- Filters applied in-memory ----
+
+  const filteredOrders = useMemo(
+    () =>
+      orders.filter((o) => {
+        if (statusFilter !== "all" && o.status !== statusFilter) {
+          return false;
+        }
+        if (!isWithinRange(o.created_at, dateRange)) {
+          return false;
+        }
+        return true;
+      }),
+    [orders, statusFilter, dateRange]
+  );
+
+  const grouped = useMemo(() => groupOrders(filteredOrders), [filteredOrders]);
+
+  // ---- JSX ----
 
   return (
-    <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-      <h1>Owner View – Caterly</h1>
+    <div className="page">
+      <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+        <h1 className="page-title">Owner View – Caterly</h1>
 
-      {/* Notifications for owner */}
-      <div
-        style={{
-          marginBottom: "1rem",
-          padding: "0.5rem 0.75rem",
-          border: "1px solid #e5e7eb",
-          borderRadius: 6,
-          background: "#f9fafb",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "0.25rem",
-          }}
-        >
-          <div>
-            <strong>Notifications</strong>{" "}
-            <span style={{ fontSize: "0.85rem", color: "#6b7280" }}>
-              {notificationsLoading
-                ? "(loading...)"
-                : unreadCount > 0
-                ? `(${unreadCount} unread)`
-                : "(no unread)"}
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={markAllRead}
-            disabled={unreadCount === 0}
-            style={{ fontSize: "0.8rem" }}
-          >
-            Mark all read
-          </button>
-        </div>
-
-        {notifications.length === 0 ? (
-          <div style={{ fontSize: "0.85rem", color: "#6b7280" }}>
-            No notifications yet.
-          </div>
-        ) : (
-          <ul
+        {/* Notifications */}
+        <div className="card" style={{ marginBottom: "1rem" }}>
+          <div
             style={{
-              listStyle: "none",
-              padding: 0,
-              margin: 0,
-              maxHeight: 150,
-              overflowY: "auto",
-              fontSize: "0.85rem",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "0.25rem",
+              flexWrap: "wrap",
+              gap: "0.5rem",
             }}
           >
-            {notifications.slice(0, 10).map((n) => (
-              <li
-                key={n.id}
-                style={{
-                  padding: "2px 0",
-                  opacity: n.is_read ? 0.6 : 1,
-                }}
-              >
-                <span>
-                  {new Date(n.created_at).toLocaleString()} – {n.message}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+            <div>
+              <strong>Notifications</strong>{" "}
+              <span style={{ fontSize: "0.85rem", color: "#6b7280" }}>
+                {notificationsLoading
+                  ? "(loading...)"
+                  : unreadCount > 0
+                  ? `(${unreadCount} unread)`
+                  : "(no unread)"}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={markAllRead}
+              disabled={unreadCount === 0}
+              className="btn btn-secondary"
+              style={{ fontSize: "0.8rem" }}
+            >
+              Mark all read
+            </button>
+          </div>
 
-      {message && (
-        <div
-          style={{
-            background: "#e0f2fe",
-            border: "1px solid #bae6fd",
-            padding: "0.5rem 1rem",
-            marginBottom: "1rem",
-            borderRadius: 4,
-          }}
-        >
-          {message}
-        </div>
-      )}
-
-      {/* Restaurant selector + filters */}
-      <div
-        style={{
-          marginBottom: "1rem",
-          display: "flex",
-          flexDirection: "column",
-          gap: "0.5rem",
-        }}
-      >
-        <div>
-          <h2>Your restaurants</h2>
-          <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-            {restaurants.map((r) => (
-              <li key={r.id} style={{ marginBottom: 6 }}>
-                <button
-                  type="button"
-                  onClick={() => setSelectedRestaurant(r)}
+          {notifications.length === 0 ? (
+            <div style={{ fontSize: "0.85rem", color: "#6b7280" }}>
+              No notifications yet.
+            </div>
+          ) : (
+            <ul
+              style={{
+                listStyle: "none",
+                padding: 0,
+                margin: 0,
+                maxHeight: 150,
+                overflowY: "auto",
+                fontSize: "0.85rem",
+              }}
+            >
+              {notifications.slice(0, 10).map((n) => (
+                <li
+                  key={n.id}
                   style={{
-                    padding: "0.4rem 0.6rem",
-                    borderRadius: 4,
-                    border:
-                      selectedRestaurant?.id === r.id
-                        ? "2px solid #111827"
-                        : "1px solid #d1d5db",
-                    backgroundColor:
-                      selectedRestaurant?.id === r.id ? "#e5e7eb" : "white",
-                    width: "100%",
-                    textAlign: "left",
-                    cursor: "pointer",
+                    padding: "2px 0",
+                    opacity: n.is_read ? 0.6 : 1,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.35rem",
                   }}
                 >
-                  <div style={{ fontWeight: 600 }}>{r.name}</div>
-                  {r.description && (
-                    <div style={{ fontSize: "0.8rem", color: "#6b7280" }}>
-                      {r.description}
-                    </div>
-                  )}
-                </button>
-              </li>
-            ))}
-          </ul>
+                  <span>{getNotificationIcon(n.event)}</span>
+                  <span>
+                    {new Date(n.created_at).toLocaleString()} – {n.message}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
-        {selectedRestaurant && (
-          <div style={{ fontSize: "0.9rem", color: "#374151" }}>
-            Managing: <strong>{selectedRestaurant.name}</strong>
-          </div>
-        )}
-
+        {/* Filters */}
         <div
+          className="card"
           style={{
+            marginBottom: "1rem",
             display: "flex",
             flexWrap: "wrap",
             gap: "0.75rem",
             alignItems: "center",
           }}
         >
-          <label style={{ fontSize: "0.9rem" }}>
-            Status:
+          <div>
+            <div style={{ fontSize: "0.85rem", marginBottom: 4 }}>
+              Filter by status
+            </div>
             <select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              style={{ marginLeft: 4 }}
+              onChange={(e) =>
+                setStatusFilter(
+                  e.target.value === "all"
+                    ? "all"
+                    : (e.target.value as StatusType)
+                )
+              }
+              className="input"
+              style={{ maxWidth: 220 }}
             >
-              {STATUS_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
+              <option value="all">All statuses</option>
+              {ALL_STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {formatStatus(s)}
                 </option>
               ))}
             </select>
-          </label>
+          </div>
 
-          <label style={{ fontSize: "0.9rem" }}>
-            Date range:
+          <div>
+            <div style={{ fontSize: "0.85rem", marginBottom: 4 }}>
+              Date range
+            </div>
             <select
-              value={dateRangeFilter}
-              onChange={(e) => setDateRangeFilter(e.target.value)}
-              style={{ marginLeft: 4 }}
+              value={dateRange}
+              onChange={(e) =>
+                setDateRange(e.target.value as DateRangeFilter)
+              }
+              className="input"
+              style={{ maxWidth: 220 }}
             >
-              {DATE_RANGE_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
+              <option value="all">All time</option>
+              <option value="today">Today</option>
+              <option value="last7">Last 7 days</option>
+              <option value="last30">Last 30 days</option>
             </select>
-          </label>
+          </div>
 
-          <label style={{ fontSize: "0.9rem" }}>
-            Auto-refresh:
+          <div>
+            <div style={{ fontSize: "0.85rem", marginBottom: 4 }}>
+              Auto-refresh
+            </div>
             <select
-              value={refreshIntervalSec}
-              onChange={(e) => setRefreshIntervalSec(Number(e.target.value))}
-              style={{ marginLeft: 4 }}
+              value={autoRefreshSec}
+              onChange={(e) =>
+                setAutoRefreshSec(Number(e.target.value))
+              }
+              className="input"
+              style={{ maxWidth: 220 }}
             >
-              {REFRESH_INTERVAL_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
+              <option value={0}>Off</option>
+              <option value={15}>Every 15 seconds</option>
+              <option value={30}>Every 30 seconds</option>
+              <option value={60}>Every 1 minute</option>
+              <option value={300}>Every 5 minutes</option>
+              <option value={900}>Every 15 minutes</option>
+              <option value={3600}>Every 1 hour</option>
             </select>
-          </label>
+          </div>
 
-          <button type="button" onClick={manualRefresh}>
-            Refresh now
-          </button>
+          <div style={{ marginLeft: "auto" }}>
+            <button
+              className="btn btn-secondary"
+              onClick={() => user && loadOrders(user.id)}
+            >
+              Refresh now
+            </button>
+          </div>
         </div>
-      </div>
 
-      {/* Orders grouped by Day → Status */}
-      <h2>Orders</h2>
-      {loadingOrders ? (
-        <p>Loading orders...</p>
-      ) : orders.length === 0 ? (
-        <p>No orders match the current filters.</p>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-          {grouped.map((dayGroup) => (
-            <div
-              key={dayGroup.dayKey}
-              style={{
-                border: "1px solid #e5e7eb",
-                borderRadius: 8,
-                padding: "0.75rem 1rem",
-                background: "#f9fafb",
-              }}
-            >
-              <h3 style={{ margin: "0 0 0.5rem 0" }}>{dayGroup.dateLabel}</h3>
+        {message && <div className="alert alert-error">{message}</div>}
 
-              {dayGroup.statuses.map((statusGroup) => (
-                <div key={statusGroup.status} style={{ marginBottom: "0.75rem" }}>
-                  <h4
+        {loadingOrders ? (
+          <p>Loading orders...</p>
+        ) : filteredOrders.length === 0 ? (
+          <p>No orders found for the selected filters.</p>
+        ) : (
+          grouped.map((group) => (
+            <div key={group.restaurantId ?? "none"} style={{ marginBottom: "1.25rem" }}>
+              <h2
+                style={{
+                  fontSize: "1.1rem",
+                  fontWeight: 600,
+                  marginBottom: "0.5rem",
+                }}
+              >
+                {group.restaurantName}
+              </h2>
+
+              {group.days.map((day) => (
+                <div key={day.dayKey} style={{ marginBottom: "0.75rem" }}>
+                  <h3
                     style={{
-                      margin: "0.25rem 0 0.25rem 0",
                       fontSize: "0.95rem",
-                      color: "#374151",
+                      fontWeight: 600,
+                      marginBottom: "0.25rem",
                     }}
                   >
-                    {statusGroup.label}{" "}
-                    <span style={{ fontSize: "0.8rem", color: "#6b7280" }}>
-                      ({statusGroup.orders.length})
-                    </span>
-                  </h4>
+                    {day.dayLabel}
+                  </h3>
 
-                  <div
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "0.5rem",
-                    }}
-                  >
-                    {statusGroup.orders.map((order) => {
-                      const invoice = order.invoices?.[0] ?? null;
-                      const canGenerateInvoice =
-                        !invoice && order.status === "customer_accepted";
+                  {day.statuses.map((block) => (
+                    <div key={block.status} style={{ marginBottom: "0.5rem" }}>
+                      <div
+                        style={{
+                          fontSize: "0.85rem",
+                          fontWeight: 600,
+                          marginBottom: "0.25rem",
+                          color: "#4b5563",
+                        }}
+                      >
+                        {formatStatus(block.status)}
+                      </div>
 
-                      return (
-                        <div
-                          key={order.id}
-                          style={{
-                            border: "1px solid #ddd",
-                            borderRadius: 6,
-                            padding: "0.75rem",
-                            background: "white",
-                          }}
-                        >
-                          <div
-                            style={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              marginBottom: 4,
-                            }}
-                          >
-                            <div>
-                              <strong> Order {order.order_number ?? `#${order.id.slice(0, 8)}`} </strong>
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "0.5rem",
+                        }}
+                      >
+                        {block.orders.map((order) => {
+                          const { name: restName } = getRestaurantName(
+                            order.restaurants
+                          );
+                          const orderLabel =
+                            order.order_number ?? `#${order.id.slice(0, 8)}`;
+                          const hasInvoice =
+                            order.invoices && order.invoices.length > 0;
+
+                          return (
+                            <div key={order.id} className="card">
+                              {/* Header */}
                               <div
                                 style={{
-                                  fontSize: "0.8rem",
-                                  color: "#666",
+                                  display: "flex",
+                                  justifyContent: "space-between",
+                                  gap: "0.75rem",
+                                  flexWrap: "wrap",
+                                  marginBottom: "0.5rem",
                                 }}
                               >
-                                Placed at:{" "}
-                                {new Date(
-                                  order.created_at
-                                ).toLocaleTimeString()}
+                                <div>
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      flexWrap: "wrap",
+                                      gap: "0.5rem",
+                                      alignItems: "center",
+                                    }}
+                                  >
+                                    <strong>
+                                      Order {orderLabel}
+                                    </strong>
+                                    {renderStatusBadge(order.status)}
+                                  </div>
+                                  <div
+                                    style={{
+                                      fontSize: "0.8rem",
+                                      color: "#6b7280",
+                                      marginTop: 2,
+                                    }}
+                                  >
+                                    Placed:{" "}
+                                    {new Date(
+                                      order.created_at
+                                    ).toLocaleString()}
+                                  </div>
+                                  <div
+                                    style={{
+                                      fontSize: "0.85rem",
+                                      marginTop: 4,
+                                    }}
+                                  >
+                                    Restaurant:{" "}
+                                    <strong>{restName}</strong>
+                                  </div>
+                                </div>
+                                <div style={{ textAlign: "right" }}>
+                                  <div
+                                    style={{
+                                      fontSize: "0.9rem",
+                                      fontWeight: 600,
+                                    }}
+                                  >
+                                    Total: $
+                                    {order.total?.toFixed(2) ?? "0.00"}
+                                  </div>
+                                  {hasInvoice && (
+                                    <div
+                                      style={{
+                                        fontSize: "0.8rem",
+                                        marginTop: 4,
+                                      }}
+                                    >
+                                      Invoice:{" "}
+                                      <strong>
+                                        {order.invoices[0].is_paid
+                                          ? "paid"
+                                          : "unpaid"}
+                                      </strong>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
-                              {invoice && (
+
+                              {/* Special request */}
+                              {order.special_request && (
                                 <div
                                   style={{
                                     fontSize: "0.85rem",
-                                    marginTop: 4,
+                                    marginBottom: "0.5rem",
+                                    color: "#374151",
                                   }}
                                 >
-                                  Invoice:{" "}
-                                  <strong>{invoice.id.slice(0, 8)}</strong>{" "}
-                                  ({invoice.is_paid ? "paid" : "unpaid"})
+                                  <strong>Special request: </strong>
+                                  {order.special_request}
                                 </div>
                               )}
-                            </div>
-                            <div style={{ textAlign: "right" }}>
-                              <div>
-                                <span>Status: </span>
-                                <strong>{formatStatus(order.status)}</strong>
-                              </div>
-                              <div style={{ marginTop: 4 }}>
-                                <strong>
-                                  Total: ${order.total?.toFixed(2) ?? "0.00"}
-                                </strong>
-                              </div>
-                            </div>
-                          </div>
 
-                          {order.special_request && (
-                            <div style={{ marginBottom: 6 }}>
-                              <strong>Special request:</strong>{" "}
-                              {order.special_request}
-                            </div>
-                          )}
+                              {/* Items */}
+                              <table
+                                style={{
+                                  width: "100%",
+                                  borderCollapse: "collapse",
+                                  fontSize: "0.9rem",
+                                  marginTop: "0.25rem",
+                                }}
+                              >
+                                <thead>
+                                  <tr>
+                                    <th
+                                      style={{
+                                        textAlign: "left",
+                                        paddingBottom: 4,
+                                        borderBottom: "1px solid #e5e7eb",
+                                      }}
+                                    >
+                                      Item
+                                    </th>
+                                    <th
+                                      style={{
+                                        textAlign: "center",
+                                        paddingBottom: 4,
+                                        borderBottom: "1px solid #e5e7eb",
+                                      }}
+                                    >
+                                      Qty
+                                    </th>
+                                    <th
+                                      style={{
+                                        textAlign: "right",
+                                        paddingBottom: 4,
+                                        borderBottom: "1px solid #e5e7eb",
+                                      }}
+                                    >
+                                      Price
+                                    </th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {order.order_items.map((item) => (
+                                    <tr key={item.id}>
+                                      <td
+                                        style={{
+                                          paddingTop: 4,
+                                          paddingBottom: 4,
+                                        }}
+                                      >
+                                        {getMenuItemName(
+                                          item.menu_items
+                                        )}
+                                      </td>
+                                      <td
+                                        style={{
+                                          textAlign: "center",
+                                          paddingTop: 4,
+                                          paddingBottom: 4,
+                                        }}
+                                      >
+                                        {item.quantity}
+                                      </td>
+                                      <td
+                                        style={{
+                                          textAlign: "right",
+                                          paddingTop: 4,
+                                          paddingBottom: 4,
+                                        }}
+                                      >
+                                        $
+                                        {item.price != null
+                                          ? item.price.toFixed(2)
+                                          : "0.00"}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
 
-                          <table
-                            style={{
-                              width: "100%",
-                              borderCollapse: "collapse",
-                              marginBottom: 6,
-                            }}
-                          >
-                            <thead>
-                              <tr>
-                                <th
-                                  style={{
-                                    textAlign: "left",
-                                    borderBottom: "1px solid #ddd",
-                                  }}
-                                >
-                                  Item
-                                </th>
-                                <th
-                                  style={{
-                                    textAlign: "right",
-                                    borderBottom: "1px solid #ddd",
-                                  }}
-                                >
-                                  Qty
-                                </th>
-                                <th
-                                  style={{
-                                    textAlign: "right",
-                                    borderBottom: "1px solid #ddd",
-                                  }}
-                                >
-                                  Price
-                                </th>
-                                <th
-                                  style={{
-                                    textAlign: "right",
-                                    borderBottom: "1px solid #ddd",
-                                  }}
-                                >
-                                  Line Total
-                                </th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {order.order_items?.map((oi) => (
-                                <tr key={oi.id}>
-                                  <td style={{ padding: "3px 0" }}>
-                                    {getItemName(oi.menu_items)}
-                                  </td>
-                                  <td
+                              {/* Status history */}
+                              {order.order_status_history &&
+                                order.order_status_history.length >
+                                  0 && (
+                                  <div
                                     style={{
-                                      padding: "3px 0",
-                                      textAlign: "right",
+                                      marginTop: 8,
+                                      fontSize: "0.85rem",
                                     }}
                                   >
-                                    {oi.quantity}
-                                  </td>
-                                  <td
-                                    style={{
-                                      padding: "3px 0",
-                                      textAlign: "right",
-                                    }}
-                                  >
-                                    ${oi.price.toFixed(2)}
-                                  </td>
-                                  <td
-                                    style={{
-                                      padding: "3px 0",
-                                      textAlign: "right",
-                                    }}
-                                  >
-                                    {(oi.price * oi.quantity).toFixed(2)}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
+                                    <strong>Status history:</strong>
+                                    <ul
+                                      style={{
+                                        margin: "4px 0 0 0",
+                                        paddingLeft: "1.1rem",
+                                      }}
+                                    >
+                                      {[...order.order_status_history]
+                                        .sort(
+                                          (a, b) =>
+                                            new Date(
+                                              a.changed_at
+                                            ).getTime() -
+                                            new Date(
+                                              b.changed_at
+                                            ).getTime()
+                                        )
+                                        .map((h) => (
+                                          <li key={h.id}>
+                                            {new Date(
+                                              h.changed_at
+                                            ).toLocaleString()}{" "}
+                                            –{" "}
+                                            {h.old_status
+                                              ? `${formatStatus(
+                                                  h.old_status
+                                                )} → `
+                                              : ""}
+                                            <strong>
+                                              {formatStatus(
+                                                h.new_status
+                                              )}
+                                            </strong>
+                                          </li>
+                                        ))}
+                                    </ul>
+                                  </div>
+                                )}
 
-                          <div
-                            style={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              alignItems: "center",
-                              gap: "0.75rem",
-                              flexWrap: "wrap",
-                            }}
-                          >
-                            <div>
-                              <strong>Total:</strong>{" "}
-                              ${order.total?.toFixed(2) ?? "0.00"}
-                            </div>
-                            <div
-                              style={{
-                                display: "flex",
-                                gap: "0.5rem",
-                                flexWrap: "wrap",
-                              }}
-                            >
-                              <button
-                                onClick={() =>
-                                  updateStatus(order.id, "owner_review")
-                                }
+                              {/* Action buttons */}
+                              <div
+                                style={{
+                                  display: "flex",
+                                  flexWrap: "wrap",
+                                  gap: "0.75rem",
+                                  marginTop: "0.75rem",
+                                }}
                               >
-                                Mark as Reviewed
-                              </button>
-                              <button
-                                onClick={() =>
-                                  updateStatus(order.id, "changes_requested")
-                                }
-                              >
-                                Request Changes
-                              </button>
-                              <button
-                                onClick={() =>
-                                  updateStatus(order.id, "customer_accepted")
-                                }
-                              >
-                                Mark as Accepted
-                              </button>
-                              <button
-                                onClick={() => generateInvoice(order)}
-                                disabled={
-                                  !canGenerateInvoice ||
-                                  invoiceLoadingId === order.id
-                                }
-                              >
-                                {invoice
-                                  ? invoice.is_paid
-                                    ? "Invoice paid"
-                                    : "Invoice created"
-                                  : invoiceLoadingId === order.id
-                                  ? "Creating..."
-                                  : order.status !== "customer_accepted"
-                                  ? "Wait for acceptance"
-                                  : "Generate invoice"}
-                              </button>
-                            </div>
+                                {/* Mark as reviewed */}
+                                {order.status === "pending" && (
+                                  <button
+                                    className="btn btn-primary"
+                                    onClick={() =>
+                                      updateStatus(
+                                        order.id,
+                                        "owner_review"
+                                      )
+                                    }
+                                    disabled={
+                                      actionOrderId === order.id
+                                    }
+                                  >
+                                    {actionOrderId === order.id
+                                      ? "Updating..."
+                                      : "Mark as Reviewed"}
+                                  </button>
+                                )}
 
-                            {/* Status history timeline */}
-                            {order.order_status_history && order.order_status_history.length > 0 && (
-                              <div style={{ marginBottom: 8, fontSize: "0.85rem" }}>
-                                <strong>Status history:</strong>
-                                <ul style={{ margin: "4px 0 0 0", paddingLeft: "1.1rem" }}>
-                                  {[...order.order_status_history]
-                                    .sort(
-                                      (a, b) =>
-                                        new Date(a.changed_at).getTime() -
-                                        new Date(b.changed_at).getTime()
-                                    )
-                                    .map((h) => (
-                                      <li key={h.id}>
-                                        <span>
-                                          {new Date(h.changed_at).toLocaleString()} –{" "}
-                                          {h.old_status
-                                            ? `${formatStatus(h.old_status)} → `
-                                            : ""}
-                                          <strong>{formatStatus(h.new_status)}</strong>
-                                        </span>
-                                      </li>
-                                    ))}
-                                </ul>
+                                {/* Request changes */}
+                                {(order.status === "pending" ||
+                                  order.status ===
+                                    "owner_review") && (
+                                  <button
+                                    className="btn btn-secondary"
+                                    onClick={() =>
+                                      updateStatus(
+                                        order.id,
+                                        "changes_requested"
+                                      )
+                                    }
+                                    disabled={
+                                      actionOrderId === order.id
+                                    }
+                                  >
+                                    {actionOrderId === order.id
+                                      ? "Updating..."
+                                      : "Request Changes"}
+                                  </button>
+                                )}
+
+                                {/* Mark completed */}
+                                {order.status ===
+                                  "customer_accepted" && (
+                                  <button
+                                    className="btn btn-secondary"
+                                    onClick={() =>
+                                      updateStatus(
+                                        order.id,
+                                        "completed"
+                                      )
+                                    }
+                                    disabled={
+                                      actionOrderId === order.id
+                                    }
+                                  >
+                                    {actionOrderId === order.id
+                                      ? "Updating..."
+                                      : "Mark Completed"}
+                                  </button>
+                                )}
+
+                                {/* Generate invoice */}
+                                {order.status ===
+                                  "customer_accepted" &&
+                                  !hasInvoice && (
+                                    <button
+                                      className="btn btn-primary"
+                                      onClick={() =>
+                                        generateInvoice(order)
+                                      }
+                                      disabled={
+                                        actionOrderId === order.id
+                                      }
+                                    >
+                                      {actionOrderId === order.id
+                                        ? "Generating..."
+                                        : "Generate Invoice"}
+                                    </button>
+                                  )}
+
+                                {/* Cancel */}
+                                {order.status !== "cancelled" &&
+                                  order.status !== "completed" && (
+                                    <button
+                                      className="btn btn-danger"
+                                      onClick={() =>
+                                        updateStatus(
+                                          order.id,
+                                          "cancelled"
+                                        )
+                                      }
+                                      disabled={
+                                        actionOrderId === order.id
+                                      }
+                                    >
+                                      {actionOrderId === order.id
+                                        ? "Cancelling..."
+                                        : "Cancel Order"}
+                                    </button>
+                                  )}
                               </div>
-                            )}
-
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ))}
             </div>
-          ))}
-        </div>
-      )}
+          ))
+        )}
+      </div>
     </div>
   );
 }
