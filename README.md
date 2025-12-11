@@ -51,3 +51,23 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 ## code diagram
 ![Code diagram](/diagrams/c4_code.png)
 >>>>>>> 058852dac17d6a48fe179f9a7e28f720f9bb27d6
+
+
+
+## Git commands
+```
+* powershell
+* cd C:\mylocal\Myapps\caterly-web
+* git add .
+* git commit -m "notifications on invoice and other."
+* git push
+```
+
+
+```
+C:\mylocal\Myapps\caterly-web> 
+git branch -M main
+ git remote add origin https://github.com/Caterly2025/caterly.git
+ git remote add origin https://github.com/Caterly2025/caterly.git
+
+```
