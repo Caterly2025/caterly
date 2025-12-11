@@ -43,7 +43,6 @@ export default function OwnerAuthPage() {
       return;
     }
 
-    // Create user profile
     const { error: profileError } = await supabase.from("user_profiles").insert({
       id: user.id,
       role: "owner",
@@ -81,62 +80,77 @@ export default function OwnerAuthPage() {
       return;
     }
 
-    router.push("/owner/onboarding"); // if they already have restaurant, onboarding will redirect them
+    router.push("/owner/onboarding");
   };
 
   return (
-    <div style={{ maxWidth: 500, margin: "0 auto" }}>
-      <h1>Owner Sign Up / Login</h1>
+    <div className="page">
+      <div className="page-narrow">
+        <div className="card">
+          <h1 className="page-title">Restaurant Owner Access</h1>
+          <p className="page-subtitle">
+            Create an owner account to manage your restaurant, employees, and orders.
+          </p>
 
-      {message && (
-        <div style={{ background: "#fee2e2", padding: 10, borderRadius: 4 }}>
-          {message}
+          {message && (
+            <div className="alert alert-error">
+              {message}
+            </div>
+          )}
+
+          <div className="form-section">
+            <label className="form-label">Full Name</label>
+            <input
+              type="text"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              className="input"
+            />
+
+            <label className="form-label">Phone Number</label>
+            <input
+              type="text"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              className="input"
+              placeholder="+1 555-123-4567"
+            />
+
+            <label className="form-label">Email</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="input"
+            />
+
+            <label className="form-label">Password</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="input"
+            />
+          </div>
+
+          <div className="button-row">
+            <button
+              onClick={handleSignup}
+              className="btn btn-primary"
+              disabled={loading}
+            >
+              {loading ? "Creating..." : "Sign Up as Owner"}
+            </button>
+
+            <button
+              onClick={handleLogin}
+              className="btn btn-secondary"
+              disabled={loading}
+            >
+              Login
+            </button>
+          </div>
         </div>
-      )}
-
-      <div style={{ marginTop: 20 }}>
-        <label>Full Name</label>
-        <input
-          type="text"
-          value={fullName}
-          onChange={(e) => setFullName(e.target.value)}
-          className="input"
-        />
-
-        <label>Phone Number</label>
-        <input
-          type="text"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          className="input"
-          placeholder="+1 555-123-4567"
-        />
-
-        <label>Email</label>
-        <input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="input"
-        />
-
-        <label>Password</label>
-        <input
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="input"
-        />
-      </div>
-
-      <div style={{ marginTop: 20, display: "flex", gap: 10 }}>
-        <button onClick={handleSignup} className="btn-primary" disabled={loading}>
-          {loading ? "Creating..." : "Sign Up as Owner"}
-        </button>
-
-        <button onClick={handleLogin} className="btn-secondary" disabled={loading}>
-          Login
-        </button>
       </div>
     </div>
   );

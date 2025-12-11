@@ -25,42 +25,165 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+nav {
+  background: var(--foreground);
+  /*color: var(--background);*/
+  color: red;
+}
+/* --- Layout helpers --- */
+
+.page {
+  min-height: 100vh;
+  padding: 1.5rem 1rem;
+  box-sizing: border-box;
+}
+
+@media (min-width: 640px) {
+  .page {
+    padding: 2rem 1.5rem;
+  }
+}
+
+.page-narrow {
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+/* Card-style containers */
+.card {
+  background: #ffffff;
+  border-radius: 0.75rem;
+  border: 1px solid #e5e7eb;
+  padding: 1.25rem;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.04);
+}
+
+/* Headings inside pages */
+.page-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+}
+
+.page-subtitle {
+  font-size: 0.95rem;
+  color: #6b7280;
+  margin-bottom: 1.25rem;
+}
+
+/* --- Form controls --- */
+
+.form-section {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.form-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #374151;
+}
+
 .input {
   width: 100%;
-  padding: 10px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  margin-bottom: 10px;
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid #d1d5db;
+  font-size: 0.95rem;
+  box-sizing: border-box;
+}
+
+.input:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 1px #2563eb33;
+}
+
+/* --- Buttons --- */
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+/* Base button */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.55rem 1rem;
+  border-radius: 999px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.05s ease, box-shadow 0.15s ease;
+  text-align: center;
+}
+
+/* On small screens, make buttons full-width; on wider, auto */
+.btn {
+  width: 100%;
+}
+
+@media (min-width: 480px) {
+  .btn {
+    width: auto;
+  }
 }
 
 .btn-primary {
   background: #2563eb;
-  color: white;
-  padding: 10px 15px;
-  border-radius: 6px;
-  border: none;
-  cursor: pointer;
+  color: #ffffff;
+  box-shadow: 0 4px 10px rgba(37, 99, 235, 0.25);
 }
 
 .btn-primary:hover {
   background: #1d4ed8;
+  box-shadow: 0 6px 14px rgba(37, 99, 235, 0.35);
+  transform: translateY(-1px);
 }
 
 .btn-secondary {
   background: #f3f4f6;
-  color: #111;
-  padding: 10px 15px;
-  border-radius: 6px;
-  border: none;
-  cursor: pointer;
+  color: #111827;
 }
 
 .btn-secondary:hover {
   background: #e5e7eb;
 }
 
-.form-section label {
-  display: block;
-  margin-top: 12px;
-  font-weight: 600;
+.btn-danger {
+  background: #ef4444;
+  color: #ffffff;
+}
+
+.btn-danger:hover {
+  background: #dc2626;
+}
+
+/* --- Alert/message box --- */
+
+.alert {
+  margin-top: 0.75rem;
+  margin-bottom: 0.75rem;
+  padding: 0.6rem 0.8rem;
+  border-radius: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.alert-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+}
+
+.alert-info {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1d4ed8;
 }

@@ -41,9 +41,11 @@ export default function OwnerOnboarding() {
     };
 
     if (user) checkRestaurant();
-  }, [user]);
+  }, [user, router]);
 
   const handleCreateRestaurant = async () => {
+    setMessage(null);
+
     if (!name || !cuisine || !address || !zip || !phone) {
       setMessage("All fields are required.");
       return;
@@ -69,37 +71,69 @@ export default function OwnerOnboarding() {
   if (loading) return <p>Loading...</p>;
 
   return (
-    <div style={{ maxWidth: 600, margin: "0 auto" }}>
-      <h1>Set Up Your Restaurant</h1>
+    <div className="page">
+      <div className="page-narrow">
+        <div className="card">
+          <h1 className="page-title">Set Up Your Restaurant</h1>
+          <p className="page-subtitle">
+            Tell us a bit about your restaurant so we can link orders and notifications.
+          </p>
 
-      {message && (
-        <div style={{ background: "#fee2e2", padding: 10 }}>{message}</div>
-      )}
+          {message && (
+            <div className="alert alert-error">
+              {message}
+            </div>
+          )}
 
-      <div className="form-section">
-        <label>Restaurant Name</label>
-        <input value={name} onChange={(e) => setName(e.target.value)} />
+          <div className="form-section">
+            <label className="form-label">Restaurant Name</label>
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="input"
+            />
 
-        <label>Cuisine Type</label>
-        <input value={cuisine} onChange={(e) => setCuisine(e.target.value)} />
+            <label className="form-label">Cuisine Type</label>
+            <input
+              value={cuisine}
+              onChange={(e) => setCuisine(e.target.value)}
+              className="input"
+              placeholder="e.g. South Indian, Pizza, Deli"
+            />
 
-        <label>Address</label>
-        <input value={address} onChange={(e) => setAddress(e.target.value)} />
+            <label className="form-label">Address</label>
+            <input
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              className="input"
+            />
 
-        <label>Zip Code</label>
-        <input value={zip} onChange={(e) => setZip(e.target.value)} />
+            <label className="form-label">Zip Code</label>
+            <input
+              value={zip}
+              onChange={(e) => setZip(e.target.value)}
+              className="input"
+            />
 
-        <label>Primary Phone</label>
-        <input
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          placeholder="+1 555-555-0123"
-        />
+            <label className="form-label">Primary Phone</label>
+            <input
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              className="input"
+              placeholder="+1 555-555-0123"
+            />
+          </div>
+
+          <div className="button-row">
+            <button
+              className="btn btn-primary"
+              onClick={handleCreateRestaurant}
+            >
+              Create Restaurant
+            </button>
+          </div>
+        </div>
       </div>
-
-      <button className="btn-primary" onClick={handleCreateRestaurant}>
-        Create Restaurant
-      </button>
     </div>
   );
 }
