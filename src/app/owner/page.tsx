@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { useSupabaseUser } from "@/hooks/useSupabaseUser";
 import { useNotifications } from "@/hooks/useNotifications";
 
-// -------- Types --------
+// ---------- Types ----------
 
 type RestaurantRef =
   | { id: string; name: string }
@@ -50,7 +50,7 @@ type OrderRow = {
   order_status_history: OrderStatusHistoryRow[];
 };
 
-// -------- Helpers --------
+// ---------- Helpers ----------
 
 const ALL_STATUSES = [
   "pending",
@@ -62,6 +62,8 @@ const ALL_STATUSES = [
 ] as const;
 
 type StatusType = (typeof ALL_STATUSES)[number];
+
+type DateRangeFilter = "all" | "today" | "last7" | "last30";
 
 const formatStatus = (status: string) => {
   switch (status) {
@@ -129,19 +131,15 @@ const renderStatusBadge = (status: string) => {
   );
 };
 
-const getRestaurantName = (r: RestaurantRef): { id: string | null; name: string } => {
-  if (!r) return { id: null, name: "Unknown restaurant" };
+const getRestaurantName = (r: RestaurantRef): string => {
+  if (!r) return "Unknown restaurant";
   if (Array.isArray(r)) {
-    const first = r[0];
-    if (!first) return { id: null, name: "Unknown restaurant" };
-    return { id: first.id, name: first.name };
+    return r[0]?.name ?? "Unknown restaurant";
   }
-  return { id: r.id, name: r.name };
+  return r.name;
 };
 
-const getMenuItemName = (
-  m: OrderItemRow["menu_items"]
-): string => {
+const getMenuItemName = (m: OrderItemRow["menu_items"]): string => {
   if (!m) return "Unknown item";
   if (Array.isArray(m)) return m[0]?.name ?? "Unknown item";
   return m.name;
@@ -150,24 +148,21 @@ const getMenuItemName = (
 const getNotificationIcon = (event: string) => {
   switch (event) {
     case "pending":
-      return "🕒"; // new order / waiting
+      return "🕒";
     case "owner_review":
-      return "👀"; // reviewed by owner
+      return "👀";
     case "changes_requested":
-      return "✏️"; // changes requested
+      return "✏️";
     case "customer_accepted":
-      return "✅"; // accepted by customer
+      return "✅";
     case "completed":
-      return "🏁"; // completed
+      return "🏁";
     case "cancelled":
-      return "❌"; // cancelled
+      return "❌";
     default:
       return "ℹ️";
   }
 };
-
-// Date range helper
-type DateRangeFilter = "all" | "today" | "last7" | "last30";
 
 const isWithinRange = (createdAt: string, range: DateRangeFilter): boolean => {
   if (range === "all") return true;
@@ -192,92 +187,7 @@ const isWithinRange = (createdAt: string, range: DateRangeFilter): boolean => {
   return true;
 };
 
-// Group by Restaurant -> Day -> Status
-type GroupedOrders = {
-  restaurantId: string | null;
-  restaurantName: string;
-  days: {
-    dayKey: string; // YYYY-MM-DD
-    dayLabel: string;
-    statuses: {
-      status: string;
-      orders: OrderRow[];
-    }[];
-  }[];
-};
-
-const groupOrders = (orders: OrderRow[]): GroupedOrders[] => {
-  const map = new Map<string | null, { restaurantName: string; orders: OrderRow[] }>();
-
-  for (const order of orders) {
-    const { id: restaurantId, name } = getRestaurantName(order.restaurants);
-    const key = restaurantId;
-    const entry = map.get(key);
-    if (!entry) {
-      map.set(key, { restaurantName: name, orders: [order] });
-    } else {
-      entry.orders.push(order);
-    }
-  }
-
-  const result: GroupedOrders[] = [];
-
-  for (const [restaurantId, value] of map.entries()) {
-    const dayMap = new Map<string, OrderRow[]>();
-
-    for (const order of value.orders) {
-      const d = new Date(order.created_at);
-      const dayKey = d.toISOString().slice(0, 10); // YYYY-MM-DD
-      const arr = dayMap.get(dayKey);
-      if (!arr) {
-        dayMap.set(dayKey, [order]);
-      } else {
-        arr.push(order);
-      }
-    }
-
-    const days = Array.from(dayMap.entries())
-      .sort((a, b) => (a[0] < b[0] ? 1 : -1)) // latest date first
-      .map(([dayKey, dayOrders]) => {
-        // group by status
-        const statusMap = new Map<string, OrderRow[]>();
-        for (const o of dayOrders) {
-          const s = o.status;
-          const arr = statusMap.get(s);
-          if (!arr) statusMap.set(s, [o]);
-          else arr.push(o);
-        }
-
-        const statuses = Array.from(statusMap.entries())
-          .sort((a, b) => a[0].localeCompare(b[0]))
-          .map(([status, stsOrders]) => ({
-            status,
-            orders: stsOrders,
-          }));
-
-        const dateLabel = new Date(dayKey + "T00:00:00Z").toLocaleDateString();
-
-        return {
-          dayKey,
-          dayLabel: dateLabel,
-          statuses,
-        };
-      });
-
-    result.push({
-      restaurantId,
-      restaurantName: value.restaurantName,
-      days,
-    });
-  }
-
-  // sort restaurants by name
-  result.sort((a, b) => a.restaurantName.localeCompare(b.restaurantName));
-
-  return result;
-};
-
-// -------- Component --------
+// ---------- Component ----------
 
 export default function OwnerPage() {
   const { user, loading: authLoading } = useSupabaseUser();
@@ -289,7 +199,7 @@ export default function OwnerPage() {
 
   const [statusFilter, setStatusFilter] = useState<"all" | StatusType>("all");
   const [dateRange, setDateRange] = useState<DateRangeFilter>("all");
-  const [autoRefreshSec, setAutoRefreshSec] = useState<number>(300); // default 5 min
+  const [autoRefreshSec, setAutoRefreshSec] = useState<number>(300);
 
   const {
     notifications,
@@ -297,8 +207,6 @@ export default function OwnerPage() {
     loading: notificationsLoading,
     markAllRead,
   } = useNotifications("owner");
-
-  // ---- Load orders ----
 
   const loadOrders = async (ownerUserId: string) => {
     setLoadingOrders(true);
@@ -378,8 +286,6 @@ export default function OwnerPage() {
     return () => clearInterval(id);
   }, [user, autoRefreshSec]);
 
-  // ---- Actions ----
-
   const updateStatus = async (orderId: string, newStatus: StatusType) => {
     if (!user) return;
     setActionOrderId(orderId);
@@ -430,8 +336,6 @@ export default function OwnerPage() {
     setActionOrderId(null);
   };
 
-  // ---- Auth states ----
-
   if (authLoading) {
     return <div>Checking authentication...</div>;
   }
@@ -454,50 +358,21 @@ export default function OwnerPage() {
     );
   }
 
-  // ---- Filters applied in-memory ----
-
   const filteredOrders = useMemo(
     () =>
       orders.filter((o) => {
-        if (statusFilter !== "all" && o.status !== statusFilter) {
-          return false;
-        }
-        if (!isWithinRange(o.created_at, dateRange)) {
-          return false;
-        }
+        if (statusFilter !== "all" && o.status !== statusFilter) return false;
+        if (!isWithinRange(o.created_at, dateRange)) return false;
         return true;
       }),
     [orders, statusFilter, dateRange]
   );
 
-  const grouped = useMemo(() => groupOrders(filteredOrders), [filteredOrders]);
-
-  // ---- JSX ----
-
   return (
     <div className="page">
       <div style={{ maxWidth: 1100, margin: "0 auto" }}>
         <h1 className="page-title">Owner View – Caterly</h1>
-
-        {/* Manage employees */}
-                <div className="card" style={{ marginBottom: "1rem" }}>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: "0.25rem",
-              flexWrap: "wrap",
-              gap: "0.5rem",
-            }}
-          >
-            
-            <strong>Employee Management</strong>            
-          <a href="/owner/employees">Manage Employees</a>
-          <hr />
-          </div>
-
-
+        <div className="card"><a href="/owner/employees">Manage Employees</a></div>
         {/* Notifications */}
         <div className="card" style={{ marginBottom: "1rem" }}>
           <div
@@ -661,399 +536,297 @@ export default function OwnerPage() {
         ) : filteredOrders.length === 0 ? (
           <p>No orders found for the selected filters.</p>
         ) : (
-          grouped.map((group) => (
-            <div key={group.restaurantId ?? "none"} style={{ marginBottom: "1.25rem" }}>
-              <h2
-                style={{
-                  fontSize: "1.1rem",
-                  fontWeight: 600,
-                  marginBottom: "0.5rem",
-                }}
-              >
-                {group.restaurantName}
-              </h2>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "1rem",
+            }}
+          >
+            {filteredOrders.map((order) => {
+              const restaurantName = getRestaurantName(order.restaurants);
+              const orderLabel =
+                order.order_number ?? `#${order.id.slice(0, 8)}`;
+              const hasInvoice =
+                order.invoices && order.invoices.length > 0;
 
-              {group.days.map((day) => (
-                <div key={day.dayKey} style={{ marginBottom: "0.75rem" }}>
-                  <h3
+              return (
+                <div key={order.id} className="card">
+                  {/* Header */}
+                  <div
                     style={{
-                      fontSize: "0.95rem",
-                      fontWeight: 600,
-                      marginBottom: "0.25rem",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: "0.75rem",
+                      flexWrap: "wrap",
+                      marginBottom: "0.5rem",
                     }}
                   >
-                    {day.dayLabel}
-                  </h3>
-
-                  {day.statuses.map((block) => (
-                    <div key={block.status} style={{ marginBottom: "0.5rem" }}>
-                      <div
-                        style={{
-                          fontSize: "0.85rem",
-                          fontWeight: 600,
-                          marginBottom: "0.25rem",
-                          color: "#4b5563",
-                        }}
-                      >
-                        {formatStatus(block.status)}
-                      </div>
-
+                    <div>
                       <div
                         style={{
                           display: "flex",
-                          flexDirection: "column",
+                          flexWrap: "wrap",
                           gap: "0.5rem",
+                          alignItems: "center",
                         }}
                       >
-                        {block.orders.map((order) => {
-                          const { name: restName } = getRestaurantName(
-                            order.restaurants
-                          );
-                          const orderLabel =
-                            order.order_number ?? `#${order.id.slice(0, 8)}`;
-                          const hasInvoice =
-                            order.invoices && order.invoices.length > 0;
-
-                          return (
-                            <div key={order.id} className="card">
-                              {/* Header */}
-                              <div
-                                style={{
-                                  display: "flex",
-                                  justifyContent: "space-between",
-                                  gap: "0.75rem",
-                                  flexWrap: "wrap",
-                                  marginBottom: "0.5rem",
-                                }}
-                              >
-                                <div>
-                                  <div
-                                    style={{
-                                      display: "flex",
-                                      flexWrap: "wrap",
-                                      gap: "0.5rem",
-                                      alignItems: "center",
-                                    }}
-                                  >
-                                    <strong>
-                                      Order {orderLabel}
-                                    </strong>
-                                    {renderStatusBadge(order.status)}
-                                  </div>
-                                  <div
-                                    style={{
-                                      fontSize: "0.8rem",
-                                      color: "#6b7280",
-                                      marginTop: 2,
-                                    }}
-                                  >
-                                    Placed:{" "}
-                                    {new Date(
-                                      order.created_at
-                                    ).toLocaleString()}
-                                  </div>
-                                  <div
-                                    style={{
-                                      fontSize: "0.85rem",
-                                      marginTop: 4,
-                                    }}
-                                  >
-                                    Restaurant:{" "}
-                                    <strong>{restName}</strong>
-                                  </div>
-                                </div>
-                                <div style={{ textAlign: "right" }}>
-                                  <div
-                                    style={{
-                                      fontSize: "0.9rem",
-                                      fontWeight: 600,
-                                    }}
-                                  >
-                                    Total: $
-                                    {order.total?.toFixed(2) ?? "0.00"}
-                                  </div>
-                                  {hasInvoice && (
-                                    <div
-                                      style={{
-                                        fontSize: "0.8rem",
-                                        marginTop: 4,
-                                      }}
-                                    >
-                                      Invoice:{" "}
-                                      <strong>
-                                        {order.invoices[0].is_paid
-                                          ? "paid"
-                                          : "unpaid"}
-                                      </strong>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-
-                              {/* Special request */}
-                              {order.special_request && (
-                                <div
-                                  style={{
-                                    fontSize: "0.85rem",
-                                    marginBottom: "0.5rem",
-                                    color: "#374151",
-                                  }}
-                                >
-                                  <strong>Special request: </strong>
-                                  {order.special_request}
-                                </div>
-                              )}
-
-                              {/* Items */}
-                              <table
-                                style={{
-                                  width: "100%",
-                                  borderCollapse: "collapse",
-                                  fontSize: "0.9rem",
-                                  marginTop: "0.25rem",
-                                }}
-                              >
-                                <thead>
-                                  <tr>
-                                    <th
-                                      style={{
-                                        textAlign: "left",
-                                        paddingBottom: 4,
-                                        borderBottom: "1px solid #e5e7eb",
-                                      }}
-                                    >
-                                      Item
-                                    </th>
-                                    <th
-                                      style={{
-                                        textAlign: "center",
-                                        paddingBottom: 4,
-                                        borderBottom: "1px solid #e5e7eb",
-                                      }}
-                                    >
-                                      Qty
-                                    </th>
-                                    <th
-                                      style={{
-                                        textAlign: "right",
-                                        paddingBottom: 4,
-                                        borderBottom: "1px solid #e5e7eb",
-                                      }}
-                                    >
-                                      Price
-                                    </th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {order.order_items.map((item) => (
-                                    <tr key={item.id}>
-                                      <td
-                                        style={{
-                                          paddingTop: 4,
-                                          paddingBottom: 4,
-                                        }}
-                                      >
-                                        {getMenuItemName(
-                                          item.menu_items
-                                        )}
-                                      </td>
-                                      <td
-                                        style={{
-                                          textAlign: "center",
-                                          paddingTop: 4,
-                                          paddingBottom: 4,
-                                        }}
-                                      >
-                                        {item.quantity}
-                                      </td>
-                                      <td
-                                        style={{
-                                          textAlign: "right",
-                                          paddingTop: 4,
-                                          paddingBottom: 4,
-                                        }}
-                                      >
-                                        $
-                                        {item.price != null
-                                          ? item.price.toFixed(2)
-                                          : "0.00"}
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-
-                              {/* Status history */}
-                              {order.order_status_history &&
-                                order.order_status_history.length >
-                                  0 && (
-                                  <div
-                                    style={{
-                                      marginTop: 8,
-                                      fontSize: "0.85rem",
-                                    }}
-                                  >
-                                    <strong>Status history:</strong>
-                                    <ul
-                                      style={{
-                                        margin: "4px 0 0 0",
-                                        paddingLeft: "1.1rem",
-                                      }}
-                                    >
-                                      {[...order.order_status_history]
-                                        .sort(
-                                          (a, b) =>
-                                            new Date(
-                                              a.changed_at
-                                            ).getTime() -
-                                            new Date(
-                                              b.changed_at
-                                            ).getTime()
-                                        )
-                                        .map((h) => (
-                                          <li key={h.id}>
-                                            {new Date(
-                                              h.changed_at
-                                            ).toLocaleString()}{" "}
-                                            –{" "}
-                                            {h.old_status
-                                              ? `${formatStatus(
-                                                  h.old_status
-                                                )} → `
-                                              : ""}
-                                            <strong>
-                                              {formatStatus(
-                                                h.new_status
-                                              )}
-                                            </strong>
-                                          </li>
-                                        ))}
-                                    </ul>
-                                  </div>
-                                )}
-
-                              {/* Action buttons */}
-                              <div
-                                style={{
-                                  display: "flex",
-                                  flexWrap: "wrap",
-                                  gap: "0.75rem",
-                                  marginTop: "0.75rem",
-                                }}
-                              >
-                                {/* Mark as reviewed */}
-                                {order.status === "pending" && (
-                                  <button
-                                    className="btn btn-primary"
-                                    onClick={() =>
-                                      updateStatus(
-                                        order.id,
-                                        "owner_review"
-                                      )
-                                    }
-                                    disabled={
-                                      actionOrderId === order.id
-                                    }
-                                  >
-                                    {actionOrderId === order.id
-                                      ? "Updating..."
-                                      : "Mark as Reviewed"}
-                                  </button>
-                                )}
-
-                                {/* Request changes */}
-                                {(order.status === "pending" ||
-                                  order.status ===
-                                    "owner_review") && (
-                                  <button
-                                    className="btn btn-secondary"
-                                    onClick={() =>
-                                      updateStatus(
-                                        order.id,
-                                        "changes_requested"
-                                      )
-                                    }
-                                    disabled={
-                                      actionOrderId === order.id
-                                    }
-                                  >
-                                    {actionOrderId === order.id
-                                      ? "Updating..."
-                                      : "Request Changes"}
-                                  </button>
-                                )}
-
-                                {/* Mark completed */}
-                                {order.status ===
-                                  "customer_accepted" && (
-                                  <button
-                                    className="btn btn-secondary"
-                                    onClick={() =>
-                                      updateStatus(
-                                        order.id,
-                                        "completed"
-                                      )
-                                    }
-                                    disabled={
-                                      actionOrderId === order.id
-                                    }
-                                  >
-                                    {actionOrderId === order.id
-                                      ? "Updating..."
-                                      : "Mark Completed"}
-                                  </button>
-                                )}
-
-                                {/* Generate invoice */}
-                                {order.status ===
-                                  "customer_accepted" &&
-                                  !hasInvoice && (
-                                    <button
-                                      className="btn btn-primary"
-                                      onClick={() =>
-                                        generateInvoice(order)
-                                      }
-                                      disabled={
-                                        actionOrderId === order.id
-                                      }
-                                    >
-                                      {actionOrderId === order.id
-                                        ? "Generating..."
-                                        : "Generate Invoice"}
-                                    </button>
-                                  )}
-
-                                {/* Cancel */}
-                                {order.status !== "cancelled" &&
-                                  order.status !== "completed" && (
-                                    <button
-                                      className="btn btn-danger"
-                                      onClick={() =>
-                                        updateStatus(
-                                          order.id,
-                                          "cancelled"
-                                        )
-                                      }
-                                      disabled={
-                                        actionOrderId === order.id
-                                      }
-                                    >
-                                      {actionOrderId === order.id
-                                        ? "Cancelling..."
-                                        : "Cancel Order"}
-                                    </button>
-                                  )}
-                              </div>
-                            </div>
-                          );
-                        })}
+                        <strong>Order {orderLabel}</strong>
+                        {renderStatusBadge(order.status)}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: "0.8rem",
+                          color: "#6b7280",
+                          marginTop: 2,
+                        }}
+                      >
+                        Placed:{" "}
+                        {new Date(order.created_at).toLocaleString()}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: "0.85rem",
+                          marginTop: 4,
+                        }}
+                      >
+                        Restaurant: <strong>{restaurantName}</strong>
                       </div>
                     </div>
-                  ))}
+                    <div style={{ textAlign: "right" }}>
+                      <div
+                        style={{
+                          fontSize: "0.9rem",
+                          fontWeight: 600,
+                        }}
+                      >
+                        Total: ${order.total?.toFixed(2) ?? "0.00"}
+                      </div>
+                      {hasInvoice && (
+                        <div
+                          style={{
+                            fontSize: "0.8rem",
+                            marginTop: 4,
+                          }}
+                        >
+                          Invoice:{" "}
+                          <strong>
+                            {order.invoices[0].is_paid ? "paid" : "unpaid"}
+                          </strong>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Special request */}
+                  {order.special_request && (
+                    <div
+                      style={{
+                        fontSize: "0.85rem",
+                        marginBottom: "0.5rem",
+                        color: "#374151",
+                      }}
+                    >
+                      <strong>Special request: </strong>
+                      {order.special_request}
+                    </div>
+                  )}
+
+                  {/* Items */}
+                  <table
+                    style={{
+                      width: "100%",
+                      borderCollapse: "collapse",
+                      fontSize: "0.9rem",
+                      marginTop: "0.25rem",
+                    }}
+                  >
+                    <thead>
+                      <tr>
+                        <th
+                          style={{
+                            textAlign: "left",
+                            paddingBottom: 4,
+                            borderBottom: "1px solid #e5e7eb",
+                          }}
+                        >
+                          Item
+                        </th>
+                        <th
+                          style={{
+                            textAlign: "center",
+                            paddingBottom: 4,
+                            borderBottom: "1px solid #e5e7eb",
+                          }}
+                        >
+                          Qty
+                        </th>
+                        <th
+                          style={{
+                            textAlign: "right",
+                            paddingBottom: 4,
+                            borderBottom: "1px solid #e5e7eb",
+                          }}
+                        >
+                          Price
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {order.order_items.map((item) => (
+                        <tr key={item.id}>
+                          <td
+                            style={{
+                              paddingTop: 4,
+                              paddingBottom: 4,
+                            }}
+                          >
+                            {getMenuItemName(item.menu_items)}
+                          </td>
+                          <td
+                            style={{
+                              textAlign: "center",
+                              paddingTop: 4,
+                              paddingBottom: 4,
+                            }}
+                          >
+                            {item.quantity}
+                          </td>
+                          <td
+                            style={{
+                              textAlign: "right",
+                              paddingTop: 4,
+                              paddingBottom: 4,
+                            }}
+                          >
+                            $
+                            {item.price != null
+                              ? item.price.toFixed(2)
+                              : "0.00"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+
+                  {/* Status history */}
+                  {order.order_status_history &&
+                    order.order_status_history.length > 0 && (
+                      <div
+                        style={{
+                          marginTop: 8,
+                          fontSize: "0.85rem",
+                        }}
+                      >
+                        <strong>Status history:</strong>
+                        <ul
+                          style={{
+                            margin: "4px 0 0 0",
+                            paddingLeft: "1.1rem",
+                          }}
+                        >
+                          {[...order.order_status_history]
+                            .sort(
+                              (a, b) =>
+                                new Date(a.changed_at).getTime() -
+                                new Date(b.changed_at).getTime()
+                            )
+                            .map((h) => (
+                              <li key={h.id}>
+                                {new Date(h.changed_at).toLocaleString()} –{" "}
+                                {h.old_status
+                                  ? `${formatStatus(h.old_status)} → `
+                                  : ""}
+                                <strong>{formatStatus(h.new_status)}</strong>
+                              </li>
+                            ))}
+                        </ul>
+                      </div>
+                    )}
+
+                  {/* Action buttons */}
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: "0.75rem",
+                      marginTop: "0.75rem",
+                    }}
+                  >
+                    {order.status === "pending" && (
+                      <button
+                        className="btn btn-primary"
+                        onClick={() => updateStatus(order.id, "owner_review")}
+                        disabled={actionOrderId === order.id}
+                      >
+                        {actionOrderId === order.id
+                          ? "Updating..."
+                          : "Mark as Reviewed"}
+                      </button>
+                    )}
+
+                    {(order.status === "pending" ||
+                      order.status === "owner_review") && (
+                      <button
+                        className="btn btn-secondary"
+                        onClick={() =>
+                          updateStatus(order.id, "changes_requested")
+                        }
+                        disabled={actionOrderId === order.id}
+                      >
+                        {actionOrderId === order.id
+                          ? "Updating..."
+                          : "Request Changes"}
+                      </button>
+                    )}
+
+                    {order.status === "customer_accepted" && (
+                      <>
+                        <button
+                          className="btn btn-secondary"
+                          onClick={() =>
+                            updateStatus(order.id, "completed")
+                          }
+                          disabled={actionOrderId === order.id}
+                        >
+                          {actionOrderId === order.id
+                            ? "Updating..."
+                            : "Mark Completed"}
+                        </button>
+
+                        {!hasInvoice && (
+                          <button
+                            className="btn btn-primary"
+                            onClick={() => generateInvoice(order)}
+                            disabled={actionOrderId === order.id}
+                          >
+                            {actionOrderId === order.id
+                              ? "Generating..."
+                              : "Generate Invoice"}
+                          </button>
+                        )}
+                      </>
+                    )}
+
+                    {order.status !== "cancelled" &&
+                      order.status !== "completed" && (
+                        <button
+                          className="btn btn-danger"
+                          onClick={() =>
+                            updateStatus(order.id, "cancelled")
+                          }
+                          disabled={actionOrderId === order.id}
+                        >
+                          {actionOrderId === order.id
+                            ? "Cancelling..."
+                            : "Cancel Order"}
+                        </button>
+                      )}
+                  </div>
                 </div>
-              ))}
-            </div>
-          ))
+              );
+            })}
+          </div>
         )}
       </div>
     </div>
