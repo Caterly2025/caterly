@@ -1,186 +1,194 @@
-@import "tailwindcss";
-
-:root {
-  --background: #ffffe0; /* #f1f1f1; #ffffff */
-  --foreground: #4f4f4f; /* #39bec3; #225a63*/
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
-}
-
-/* --- Layout helpers --- */
-
+/* -----------------------------
+   GLOBAL PAGE LAYOUT
+------------------------------*/
 .page {
+  padding: 1.5rem;
+  background: #f8fafc;
   min-height: 100vh;
-  padding: 1.5rem 1rem;
-  box-sizing: border-box;
+  color: #1f2937;
+  font-family: system-ui, sans-serif;
 }
 
-@media (min-width: 640px) {
-  .page {
-    padding: 2rem 1.5rem;
-  }
-}
-
-.page-narrow {
-  max-width: 640px;
-  margin: 0 auto;
-}
-
-/* Card-style containers */
-.card {
-  background: #ffffff;
-  border-radius: 0.75rem;
-  border: 1px solid #e5e7eb;
-  padding: 1.25rem;
-  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.04);
-}
-
-/* Headings inside pages */
 .page-title {
-  font-size: 1.5rem;
+  font-size: 1.8rem;
   font-weight: 700;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.25rem;
+  color: #1e293b;
 }
 
 .page-subtitle {
+  margin-bottom: 1rem;
   font-size: 0.95rem;
-  color: #6b7280;
-  margin-bottom: 1.25rem;
+  color: #475569;
 }
 
-/* --- Form controls --- */
+/* -----------------------------
+   CARDS
+------------------------------*/
 
-.form-section {
-  margin-top: 1rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
+.card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0; /* LIGHT GRAY BORDER */
+  border-radius: 10px;
+  padding: 1.2rem 1.3rem;
+  box-shadow: 0 2px 4px rgba(15, 23, 42, 0.05);
 }
 
-.form-label {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: #374151;
+.card:hover {
+  box-shadow: 0 4px 8px rgba(15, 23, 42, 0.08);
+  transition: box-shadow 0.2s ease;
 }
+
+/* -----------------------------
+   TEXT INPUTS
+------------------------------*/
 
 .input {
   width: 100%;
-  padding: 0.6rem 0.75rem;
-  border-radius: 0.5rem;
-  border: 1px solid #d1d5db;
+  padding: 0.55rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1; /* LIGHT GREY */
   font-size: 0.95rem;
-  box-sizing: border-box;
+  background: #fdfdfd;
+  color: #1e293b;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .input:focus {
   outline: none;
-  border-color: #2563eb;
-  box-shadow: 0 0 0 1px #2563eb33;
+  border-color: #4f46e5; /* INDIGO */
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.20);
 }
 
-/* --- Buttons --- */
-
-.button-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  margin-top: 1rem;
+/* Label */
+.form-label {
+  display: block;
+  font-size: 0.85rem;
+  margin-bottom: 0.25rem;
+  color: #475569;
 }
 
-/* Base button */
+/* -----------------------------
+   BUTTONS
+------------------------------*/
+
 .btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.55rem 1rem;
-  border-radius: 999px;
-  font-size: 0.95rem;
-  font-weight: 500;
-  border: none;
+  display: inline-block;
+  padding: 0.55rem 1.1rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  border: 1px solid #cbd5e1; /* light grey default border */
   cursor: pointer;
-  transition: background 0.15s ease, transform 0.05s ease, box-shadow 0.15s ease;
-  text-align: center;
+  transition: background 0.2s ease, transform 0.1s ease;
 }
 
-/* On small screens, make buttons full-width; on wider, auto */
-.btn {
-  width: 100%;
-  border:1px solid #666666;
-
-}
-
-@media (min-width: 480px) {
-  .btn {
-    width: auto;
-  }
-}
-
+/* Primary button */
 .btn-primary {
-  background: #2563eb;
-  color: #ffffff;
-  box-shadow: 0 4px 10px rgba(37, 99, 235, 0.25);
+  background: #4f46e5;
+  color: #fff;
+  border-color: #4338ca;
 }
 
 .btn-primary:hover {
-  background: #1d4ed8;
-  box-shadow: 0 6px 14px rgba(37, 99, 235, 0.35);
-  transform: translateY(-1px);
+  background: #4338ca;
 }
 
+.btn-primary:active {
+  transform: scale(0.97);
+}
+
+/* Secondary button */
 .btn-secondary {
-  background: #f3f4f6;
-  color: #111827;
+  background: #e0e7ff;
+  color: #4338ca;
+  border-color: #c7d2fe;
 }
 
 .btn-secondary:hover {
-  background: #e5e7eb;
+  background: #c7d2fe;
 }
 
+.btn-secondary:active {
+  transform: scale(0.97);
+}
+
+/* Danger button */
 .btn-danger {
-  background: #ef4444;
-  color: #ffffff;
+  background: #fee2e2;
+  color: #b91c1c;
+  border-color: #fecaca;
 }
 
 .btn-danger:hover {
-  background: #dc2626;
+  background: #fecaca;
 }
 
-/* --- Alert/message box --- */
+.btn-danger:active {
+  transform: scale(0.97);
+}
+
+/* Action row */
+.button-row {
+  margin-top: 0.8rem;
+}
+
+/* Disabled */
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* -----------------------------
+   ALERTS
+------------------------------*/
 
 .alert {
-  margin-top: 0.75rem;
-  margin-bottom: 0.75rem;
-  padding: 0.6rem 0.8rem;
-  border-radius: 0.5rem;
-  font-size: 0.9rem;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  font-size: 0.95rem;
 }
 
 .alert-error {
-  background: #fef2f2;
+  background: #fee2e2;
+  color: #991b1b;
   border: 1px solid #fecaca;
-  color: #b91c1c;
 }
 
-.alert-info {
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
-  color: #1d4ed8;
+/* -----------------------------
+   TABLES
+------------------------------*/
+table {
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+th {
+  background: #f1f5f9;
+  font-weight: 600;
+  color: #334155;
+  padding: 8px;
+}
+
+td {
+  padding: 8px;
+}
+
+/* Row hover */
+tbody tr:hover {
+  background: #f8fafc;
+}
+
+/* -----------------------------
+   SCROLLBARS (notifications list)
+------------------------------*/
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 6px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
