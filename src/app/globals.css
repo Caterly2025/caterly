@@ -192,3 +192,108 @@ tbody tr:hover {
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
+
+/* ---------------------------------
+   DARK MODE – follows system setting
+----------------------------------*/
+@media (prefers-color-scheme: dark) {
+  .page {
+    background: #020617; /* slate-950 */
+    color: #e5e7eb;
+  }
+
+  .page-title {
+    color: #e5e7eb;
+  }
+
+  .page-subtitle {
+    color: #9ca3af;
+  }
+
+  .card {
+    background: #0f172a;           /* slate-900 */
+    border-color: #1f2937;         /* darker gray */
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.7);
+  }
+
+  .card:hover {
+    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.9);
+  }
+
+  .input {
+    background: #020617;
+    color: #e5e7eb;
+    border-color: #374151;
+  }
+
+  .input::placeholder {
+    color: #6b7280;
+  }
+
+  .input:focus {
+    border-color: #a5b4fc; /* softer indigo */
+    box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.3);
+  }
+
+  .form-label {
+    color: #e5e7eb;
+  }
+
+  .btn {
+    border-color: #4b5563;
+  }
+
+  .btn-primary {
+    background: #4f46e5;
+    border-color: #4338ca;
+    color: #f9fafb;
+  }
+
+  .btn-primary:hover {
+    background: #4338ca;
+  }
+
+  .btn-secondary {
+    background: #111827;
+    color: #e5e7eb;
+    border-color: #4b5563;
+  }
+
+  .btn-secondary:hover {
+    background: #1f2937;
+  }
+
+  .btn-danger {
+    background: #7f1d1d;
+    color: #fee2e2;
+    border-color: #b91c1c;
+  }
+
+  .btn-danger:hover {
+    background: #991b1b;
+  }
+
+  .alert-error {
+    background: rgba(127, 29, 29, 0.2);
+    border-color: #b91c1c;
+    color: #fecaca;
+  }
+
+  th {
+    background: #020617;
+    color: #e5e7eb;
+  }
+
+  tbody tr:hover {
+    background: #020617;
+  }
+
+  /* Scrollbar in dark mode */
+  ::-webkit-scrollbar-thumb {
+    background: #4b5563;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #6b7280;
+  }
+}

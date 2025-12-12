@@ -1,10 +1,9 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { AppHeader } from "@/components/AppHeader";
 
 export const metadata: Metadata = {
-  title: "Caterly",
-  description: "Catering app powered by Supabase",
+  title: "Caterly – Smart Catering Platform",
+  description: "Order management for restaurants and customers.",
 };
 
 export default function RootLayout({
@@ -14,16 +13,15 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body
-        style={{
-          margin: 0,
-          fontFamily:
-            "system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
-          backgroundColor: "#f5f5f5",
-        }}
-      >
-        <AppHeader />
-        <main style={{ padding: "2rem" }}>{children}</main>
+      <head>
+        {/* Enable automatic light/dark mode based on system settings */}
+        <meta name="color-scheme" content="light dark" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+      </head>
+
+      <body>
+        {/* Global wrapper so all pages share styling */}
+        <div className="app-container">{children}</div>
       </body>
     </html>
   );
