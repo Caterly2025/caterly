@@ -71,3 +71,9 @@ git branch -M main
  git remote add origin https://github.com/Caterly2025/caterly.git
 
 ```
+
+
+```
+supabase functions secrets set SUPABASE_URL="https://ehjgtcekptmpkgqxodeb.supabase.co"  SUPABASE_SERVICE_ROLE_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVoamd0Y2VrcHRtcGtncXhvZGViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ1MjA2NzUsImV4cCI6MjA4MDA5NjY3NX0.WWoDlDuhhID_shwOyLI6iQG4clwT8HJmyqovkzTOTUg" RESEND_API_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVoamd0Y2VrcHRtcGtncXhvZGViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ1MjA2NzUsImV4cCI6MjA4MDA5NjY3NX0.WWoDlDuhhID_shwOyLI6iQG4clwT8HJmyqovkzTOTUg" -project-ref caterlydev  -func send-order-email
+
+```

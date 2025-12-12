@@ -39,3 +39,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+supabase/config.toml
+supabase/.temp/cli-latest
+supabase/functions/send-order-email/.npmrc
+supabase/functions/send-order-email/deno.json
+supabase/functions/send-order-email/index.ts
