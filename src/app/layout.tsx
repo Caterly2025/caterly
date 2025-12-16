@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import AppShell from "@/components/AppShell";
 
 export const metadata: Metadata = {
   title: "Caterly – Smart Catering Platform",
@@ -14,14 +15,13 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        {/* Enable automatic light/dark mode based on system settings */}
+        {/* Allow both light and dark color schemes, following system by default */}
         <meta name="color-scheme" content="light dark" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </head>
 
       <body>
-        {/* Global wrapper so all pages share styling */}
-        <div className="app-container">{children}</div>
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );

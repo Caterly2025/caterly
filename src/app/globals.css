@@ -1,3 +1,17 @@
+/* Smooth theme transitions */
+html,
+body,
+.page,
+.card,
+.top-nav {
+  transition:
+    background-color 0.25s ease,
+    color 0.25s ease,
+    border-color 0.25s ease,
+    box-shadow 0.25s ease;
+}
+
+
 /* -----------------------------
    GLOBAL PAGE LAYOUT
 ------------------------------*/
@@ -137,6 +151,145 @@
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+
+/* -----------------------------
+   TOP NAVIGATION BAR
+------------------------------*/
+
+.top-nav {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: rgba(248, 250, 252, 0.9); /* light slate */
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.top-nav-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0.5rem 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* Brand */
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  text-decoration: none;
+}
+
+.brand-mark {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #4f46e5, #ec4899);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #f9fafb;
+  font-weight: 700;
+  font-size: 0.9rem;
+  box-shadow: 0 4px 10px rgba(79, 70, 229, 0.4);
+}
+
+.brand-text {
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: #1f2937;
+}
+
+/* Links */
+.nav-links {
+  display: flex;
+  gap: 0.75rem;
+  margin-left: 1rem;
+  flex: 1;
+  flex-wrap: wrap;
+}
+
+.nav-link {
+  font-size: 0.9rem;
+  color: #4b5563;
+  padding: 0.35rem 0.65rem;
+  border-radius: 999px;
+  text-decoration: none;
+  border: 1px solid transparent;
+}
+
+.nav-link:hover {
+  background: #e0f2fe;
+  border-color: #bae6fd;
+  color: #0f172a;
+}
+
+/* Right side: role + theme toggle */
+.nav-right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* Role pill */
+.role-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  background: #eff6ff;
+  border: 1px solid #dbeafe;
+  font-size: 0.8rem;
+  color: #1d4ed8;
+}
+
+.role-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #22c55e;
+}
+
+.role-text {
+  font-weight: 500;
+}
+
+/* Theme toggle pill */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid #e2e8f0;
+  background: #f9fafb;
+  padding: 2px;
+  gap: 2px;
+}
+
+.theme-toggle-btn {
+  border: none;
+  background: transparent;
+  border-radius: 999px;
+  padding: 0.15rem 0.4rem;
+  cursor: pointer;
+  font-size: 0.8rem;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #4b5563;
+}
+
+.theme-toggle-btn-active {
+  background: linear-gradient(135deg, #4f46e5, #ec4899);
+  color: #f9fafb;
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.4);
+}
+
+
 
 /* -----------------------------
    ALERTS
@@ -296,4 +449,149 @@ tbody tr:hover {
   ::-webkit-scrollbar-thumb:hover {
     background: #6b7280;
   }
+}
+
+
+/* ---------------------------------
+   DARK / LIGHT OVERRIDES VIA data-theme
+   (manual toggle beats system)
+----------------------------------*/
+
+/* Force DARK regardless of system */
+html[data-theme="dark"] .page {
+  background: #020617;
+  color: #e5e7eb;
+}
+
+html[data-theme="dark"] .card {
+  background: #0f172a;
+  border-color: #1f2937;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.7);
+}
+
+html[data-theme="dark"] .page-title {
+  color: #e5e7eb;
+}
+
+html[data-theme="dark"] .page-subtitle {
+  color: #9ca3af;
+}
+
+html[data-theme="dark"] .input {
+  background: #020617;
+  color: #e5e7eb;
+  border-color: #374151;
+}
+
+html[data-theme="dark"] .input::placeholder {
+  color: #6b7280;
+}
+
+html[data-theme="dark"] .input:focus {
+  border-color: #a5b4fc;
+  box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.3);
+}
+
+html[data-theme="dark"] .form-label {
+  color: #e5e7eb;
+}
+
+html[data-theme="dark"] .btn {
+  border-color: #4b5563;
+}
+
+html[data-theme="dark"] .btn-primary {
+  background: #4f46e5;
+  border-color: #4338ca;
+  color: #f9fafb;
+}
+
+html[data-theme="dark"] .btn-secondary {
+  background: #111827;
+  color: #e5e7eb;
+  border-color: #4b5563;
+}
+
+html[data-theme="dark"] .btn-danger {
+  background: #7f1d1d;
+  color: #fee2e2;
+  border-color: #b91c1c;
+}
+
+html[data-theme="dark"] .alert-error {
+  background: rgba(127, 29, 29, 0.2);
+  border-color: #b91c1c;
+  color: #fecaca;
+}
+
+html[data-theme="dark"] th {
+  background: #020617;
+  color: #e5e7eb;
+}
+
+html[data-theme="dark"] tbody tr:hover {
+  background: #020617;
+}
+
+html[data-theme="dark"] .top-nav {
+  background: rgba(15, 23, 42, 0.9);
+  border-bottom-color: #1f2937;
+}
+
+html[data-theme="dark"] .brand-text {
+  color: #e5e7eb;
+}
+
+html[data-theme="dark"] .nav-link {
+  color: #e5e7eb;
+}
+
+html[data-theme="dark"] .nav-link:hover {
+  background: #1e293b;
+  border-color: #4b5563;
+  color: #f9fafb;
+}
+
+html[data-theme="dark"] .role-pill {
+  background: #111827;
+  border-color: #1f2937;
+  color: #e5e7eb;
+}
+
+html[data-theme="dark"] .role-dot {
+  background: #22c55e;
+}
+
+html[data-theme="dark"] .theme-toggle {
+  background: #020617;
+  border-color: #1f2937;
+}
+
+html[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background: #4b5563;
+}
+
+/* Force LIGHT regardless of system */
+html[data-theme="light"] .page {
+  background: #f8fafc;
+  color: #1f2937;
+}
+
+html[data-theme="light"] .card {
+  background: #ffffff;
+  border-color: #e2e8f0;
+  box-shadow: 0 2px 4px rgba(15, 23, 42, 0.05);
+}
+
+html[data-theme="light"] .top-nav {
+  background: rgba(248, 250, 252, 0.9);
+  border-bottom-color: #e2e8f0;
+}
+
+html[data-theme="light"] .brand-text {
+  color: #1f2937;
+}
+
+html[data-theme="light"] .nav-link {
+  color: #4b5563;
 }
