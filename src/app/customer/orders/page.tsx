@@ -321,11 +321,12 @@ export default function CustomerOrdersPage() {
                       }}
                     >
                       <div style={{ fontSize: "0.9rem", fontWeight: 800 }}>
-                        {n.title ?? "Update"}
+                        {"Order update"}
                       </div>
                       <div style={{ color: "var(--muted)", fontSize: "0.9rem" }}>
                         {n.message}
                       </div>
+
                       <div style={{ color: "var(--muted)", fontSize: "0.8rem", marginTop: 2 }}>
                         {new Date(n.created_at).toLocaleString()}
                       </div>
