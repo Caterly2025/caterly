@@ -7,13 +7,13 @@ import { useSupabaseUser } from "./useSupabaseUser";
 export type NotificationRow = {
   id: string;
   user_id: string;
-  order_id: string;
+  order_id: string | null;
   role: "customer" | "owner";
-  event: string;
+  event: string | null;
+  title: string | null;
   message: string;
   created_at: string;
   is_read: boolean;
-  title: string;
 };
 
 type RoleFilter = "customer" | "owner" | "any";
@@ -29,6 +29,7 @@ export function useNotifications(role: RoleFilter = "any") {
   useEffect(() => {
     const fetchNotifications = async () => {
       if (authLoading) return;
+
       if (!user) {
         setNotifications([]);
         setUnreadCount(0);
@@ -40,7 +41,9 @@ export function useNotifications(role: RoleFilter = "any") {
 
       let query = supabase
         .from("user_notifications")
-        .select("*")
+        .select(
+          "id,user_id,order_id,role,event,title,message,created_at,is_read"
+        )
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
 
@@ -85,9 +88,7 @@ export function useNotifications(role: RoleFilter = "any") {
           const newRow = payload.new as NotificationRow;
 
           // Optional role filter
-          if (role !== "any" && newRow.role !== role) {
-            return;
-          }
+          if (role !== "any" && newRow.role !== role) return;
 
           setNotifications((prev) => [newRow, ...prev]);
           setUnreadCount((prev) => prev + (newRow.is_read ? 0 : 1));
@@ -102,6 +103,7 @@ export function useNotifications(role: RoleFilter = "any") {
 
   const markAllRead = async () => {
     if (!user) return;
+
     const { error } = await supabase
       .from("user_notifications")
       .update({ is_read: true })
@@ -113,16 +115,9 @@ export function useNotifications(role: RoleFilter = "any") {
       return;
     }
 
-    setNotifications((prev) =>
-      prev.map((n) => ({ ...n, is_read: true }))
-    );
+    setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
     setUnreadCount(0);
   };
 
-  return {
-    notifications,
-    unreadCount,
-    loading,
-    markAllRead,
-  };
+  return { notifications, unreadCount, loading, markAllRead };
 }
