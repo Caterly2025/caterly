@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import L from "leaflet";
 
-// Fix default marker icons (Next/Vercel builds often break Leaflet icon paths)
+// Fix marker icons for Next/Vercel (otherwise markers often render as empty)
 delete (L.Icon.Default.prototype as any)._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl:
@@ -35,25 +34,14 @@ export default function RestaurantMap({
   onSelect: (r: MapRestaurant) => void;
   height?: number;
 }) {
-  const withCoords = useMemo(
-    () =>
-      restaurants.filter(
-        (r) => typeof r.latitude === "number" && typeof r.longitude === "number"
-      ),
-    [restaurants]
+  const withCoords = restaurants.filter(
+    (r) => typeof r.latitude === "number" && typeof r.longitude === "number"
   );
 
-  const center = useMemo<[number, number]>(() => {
-    // Default to first restaurant; fallback to Northern VA-ish center
-    if (withCoords.length > 0) {
-      return [withCoords[0].latitude!, withCoords[0].longitude!];
-    }
-    return [39.0458, -77.4874];
-  }, [withCoords]);
-
-  useEffect(() => {
-    // Nothing here; keep hook for future enhancements
-  }, []);
+  const center: [number, number] =
+    withCoords.length > 0
+      ? [withCoords[0].latitude as number, withCoords[0].longitude as number]
+      : [39.043757, -77.487442]; // fallback (Ashburn-ish)
 
   return (
     <div
@@ -67,7 +55,7 @@ export default function RestaurantMap({
     >
       <MapContainer
         center={center}
-        zoom={12}
+        zoom={11}
         style={{ width: "100%", height: "100%" }}
         scrollWheelZoom
       >
@@ -77,21 +65,24 @@ export default function RestaurantMap({
         />
 
         {withCoords.map((r) => (
-          <Marker key={r.id} position={[r.latitude!, r.longitude!]}>
+          <Marker key={r.id} position={[r.latitude as number, r.longitude as number]}>
             <Popup>
-              <div style={{ minWidth: 220 }}>
+              <div style={{ minWidth: 240 }}>
                 <div style={{ fontWeight: 900, marginBottom: 4 }}>{r.name}</div>
-                <div style={{ fontSize: 12, opacity: 0.8 }}>
-                  {r.cuisine_type ?? ""}
-                </div>
+                {r.cuisine_type ? (
+                  <div style={{ fontSize: 12, opacity: 0.85 }}>{r.cuisine_type}</div>
+                ) : null}
+
                 <div style={{ fontSize: 12, marginTop: 6, opacity: 0.9 }}>
                   {[r.address, r.city, r.state, r.zip_code]
                     .filter(Boolean)
                     .join(", ")}
                 </div>
+
                 {r.primary_phone ? (
                   <div style={{ fontSize: 12, marginTop: 6 }}>📞 {r.primary_phone}</div>
                 ) : null}
+
                 <button
                   className="btn btn-primary"
                   style={{ marginTop: 10, width: "100%" }}
