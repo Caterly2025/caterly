@@ -1,24 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useSupabaseUser } from "@/hooks/useSupabaseUser";
 import { useNotifications } from "@/hooks/useNotifications";
 
-// ---- Types ----
-
 type RestaurantRef =
-  | { name: string }
-  | { name: string }[]
+  | { id: string; name: string }
+  | { id: string; name: string }[]
   | null;
-
-type OrderStatusHistoryRow = {
-  id: string;
-  old_status: string | null;
-  new_status: string;
-  changed_by: string | null;
-  changed_at: string;
-};
 
 type OrderItemRow = {
   id: string;
@@ -30,6 +21,13 @@ type OrderItemRow = {
     | null;
 };
 
+type InvoiceRow = {
+  id: string;
+  total: number | null;
+  is_paid: boolean | null;
+  created_at: string;
+};
+
 type OrderRow = {
   id: string;
   order_number: string | null;
@@ -39,28 +37,44 @@ type OrderRow = {
   created_at: string;
   restaurants: RestaurantRef;
   order_items: OrderItemRow[];
-  order_status_history: OrderStatusHistoryRow[];
+  invoices: InvoiceRow[];
 };
 
-// ---- Helpers ----
+type StatusType =
+  | "pending"
+  | "owner_review"
+  | "changes_requested"
+  | "customer_accepted"
+  | "completed"
+  | "cancelled";
 
-const formatStatus = (status: string) => {
-  switch (status) {
+const formatStatus = (s: string) => {
+  switch (s) {
     case "pending":
-      return "Pending owner review";
+      return "Submitted";
     case "owner_review":
-      return "Reviewed by owner";
+      return "Reviewed";
     case "changes_requested":
       return "Changes requested";
     case "customer_accepted":
-      return "Accepted by customer";
+      return "Accepted";
     case "completed":
       return "Completed";
     case "cancelled":
       return "Cancelled";
     default:
-      return status;
+      return s;
   }
+};
+
+const statusBadge = (s: string) => {
+  let cls = "badge badge-info";
+  if (s === "completed") cls = "badge badge-success";
+  if (s === "pending") cls = "badge badge-info";
+  if (s === "changes_requested") cls = "badge badge-warn";
+  if (s === "cancelled") cls = "badge badge-danger";
+
+  return <span className={cls}>{formatStatus(s)}</span>;
 };
 
 const getRestaurantName = (r: RestaurantRef): string => {
@@ -69,81 +83,25 @@ const getRestaurantName = (r: RestaurantRef): string => {
   return r.name;
 };
 
-const getMenuItemName = (
-  m: OrderItemRow["menu_items"]
-): string => {
+const getMenuItemName = (m: OrderItemRow["menu_items"]): string => {
   if (!m) return "Unknown item";
   if (Array.isArray(m)) return m[0]?.name ?? "Unknown item";
   return m.name;
 };
 
-const getNotificationIcon = (event: string) => {
-  switch (event) {
-    case "pending":
-      return "🕒"; // new order / waiting
-    case "owner_review":
-      return "👀"; // reviewed by owner
-    case "changes_requested":
-      return "✏️"; // changes requested
-    case "customer_accepted":
-      return "✅"; // accepted by customer
-    case "completed":
-      return "🏁"; // completed
-    case "cancelled":
-      return "❌"; // cancelled
-    default:
-      return "ℹ️"; // generic info
+const sendOrderEmailEvent = async (
+  orderId: string,
+  event: "order_created" | "order_status_changed" | "invoice_created",
+  newStatus?: string
+) => {
+  try {
+    await supabase.functions.invoke("send-order-email", {
+      body: { orderId, event, newStatus },
+    });
+  } catch (err) {
+    console.error("Error invoking send-order-email:", err);
   }
 };
-
-const renderStatusBadge = (status: string) => {
-  let bg = "#e5e7eb";
-  let color = "#111827";
-
-  switch (status) {
-    case "pending":
-      bg = "#fef3c7";
-      color = "#92400e";
-      break;
-    case "owner_review":
-      bg = "#dcfce7";
-      color = "#166534";
-      break;
-    case "changes_requested":
-      bg = "#fce7f3";
-      color = "#9d174d";
-      break;
-    case "customer_accepted":
-      bg = "#dbeafe";
-      color = "#1d4ed8";
-      break;
-    case "completed":
-      bg = "#e5e7eb";
-      color = "#111827";
-      break;
-    case "cancelled":
-      bg = "#fee2e2";
-      color = "#b91c1c";
-      break;
-  }
-
-  return (
-    <span
-      style={{
-        padding: "4px 10px",
-        borderRadius: 999,
-        fontSize: "0.75rem",
-        fontWeight: 600,
-        background: bg,
-        color,
-      }}
-    >
-      {formatStatus(status)}
-    </span>
-  );
-};
-
-// ---- Component ----
 
 export default function CustomerOrdersPage() {
   const { user, loading: authLoading } = useSupabaseUser();
@@ -151,7 +109,8 @@ export default function CustomerOrdersPage() {
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
-  const [actionOrderId, setActionOrderId] = useState<string | null>(null);
+
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   const {
     notifications,
@@ -160,8 +119,7 @@ export default function CustomerOrdersPage() {
     markAllRead,
   } = useNotifications("customer");
 
-  // Shared fetch logic so we can reuse after actions
-  const loadOrders = async (currentUserId: string) => {
+  const loadOrders = async (customerId: string) => {
     setLoadingOrders(true);
     setMessage(null);
 
@@ -175,23 +133,25 @@ export default function CustomerOrdersPage() {
         special_request,
         total,
         created_at,
-        restaurants ( name ),
+        restaurants (
+          id,
+          name
+        ),
         order_items (
           id,
           quantity,
           price,
           menu_items ( name )
         ),
-        order_status_history (
+        invoices (
           id,
-          old_status,
-          new_status,
-          changed_by,
-          changed_at
+          total,
+          is_paid,
+          created_at
         )
       `
       )
-      .eq("customer_id", currentUserId)
+      .eq("customer_id", customerId)
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -202,7 +162,14 @@ export default function CustomerOrdersPage() {
       return;
     }
 
-    setOrders((data || []) as OrderRow[]);
+    const rows = (data || []) as OrderRow[];
+    setOrders(rows);
+
+    // Auto-expand latest order if none expanded yet
+    if (rows.length > 0 && Object.keys(expanded).length === 0) {
+      setExpanded({ [rows[0].id]: true });
+    }
+
     setLoadingOrders(false);
   };
 
@@ -214,11 +181,11 @@ export default function CustomerOrdersPage() {
       return;
     }
     void loadOrders(user.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading, user]);
 
   const handleAcceptChanges = async (orderId: string) => {
     if (!user) return;
-    setActionOrderId(orderId);
     setMessage(null);
 
     const { error } = await supabase
@@ -227,19 +194,17 @@ export default function CustomerOrdersPage() {
       .eq("id", orderId);
 
     if (error) {
-      console.error("Error accepting order changes:", error);
+      console.error("Error accepting changes:", error);
       setMessage("Error accepting changes. Please try again.");
-      setActionOrderId(null);
       return;
     }
 
+    await sendOrderEmailEvent(orderId, "order_status_changed", "customer_accepted");
     await loadOrders(user.id);
-    setActionOrderId(null);
   };
 
   const handleCancelOrder = async (orderId: string) => {
     if (!user) return;
-    setActionOrderId(orderId);
     setMessage(null);
 
     const { error } = await supabase
@@ -250,399 +215,316 @@ export default function CustomerOrdersPage() {
     if (error) {
       console.error("Error cancelling order:", error);
       setMessage("Error cancelling order. Please try again.");
-      setActionOrderId(null);
       return;
     }
 
+    await sendOrderEmailEvent(orderId, "order_status_changed", "cancelled");
     await loadOrders(user.id);
-    setActionOrderId(null);
   };
 
+  const orderCards = useMemo(() => orders, [orders]);
+
   if (authLoading) {
-    return <div>Checking authentication...</div>;
+    return <div className="page"><div className="container">Checking authentication…</div></div>;
   }
 
   if (!user) {
     return (
-      <div className="page">
-        <div style={{ maxWidth: 800, margin: "0 auto" }}>
-          <div className="card">
-            <h1 className="page-title">My Orders – Caterly</h1>
-            <p className="page-subtitle">
-              You must be logged in to see your orders.
-            </p>
-            <p>
-              Go to <a href="/auth">Auth</a> to login or sign up.
-            </p>
+      <>
+        <div className="hero">
+          <div className="hero-inner">
+            <h1 className="hero-title">My Orders</h1>
+            <div className="hero-subtitle">Track and view your orders</div>
           </div>
         </div>
-      </div>
+
+        <div className="page">
+          <div className="container">
+            <div className="card">
+              <p>You must be logged in to view your orders.</p>
+              <p>
+                Go to <Link href="/auth/customer">Customer Auth</Link> to login or sign up.
+              </p>
+            </div>
+          </div>
+        </div>
+      </>
     );
   }
 
   return (
-    <div className="page">
-      <div style={{ maxWidth: 1000, margin: "0 auto" }}>
-        <h1 className="page-title">My Orders</h1>
-
-        {/* Notifications box */}
-        <div className="card" style={{ marginBottom: "1rem" }}>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: "0.25rem",
-              gap: "0.5rem",
-              flexWrap: "wrap",
-            }}
-          >
+    <>
+      {/* Hero like screenshot */}
+      <div className="hero">
+        <div className="hero-inner">
+          <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap" }}>
             <div>
-              <strong>Updates on your orders</strong>{" "}
-              <span style={{ fontSize: "0.85rem", color: "#6b7280" }}>
-                {notificationsLoading
-                  ? "(loading...)"
-                  : unreadCount > 0
-                  ? `(${unreadCount} unread)`
-                  : "(no unread)"}
-              </span>
+              <h1 className="hero-title">My Orders</h1>
+              <div className="hero-subtitle">Track and view your orders</div>
             </div>
-            <button
-              type="button"
-              onClick={markAllRead}
-              disabled={unreadCount === 0}
-              className="btn btn-secondary"
-              style={{ fontSize: "0.8rem" }}
-            >
-              Mark all read
-            </button>
-          </div>
 
-          {notifications.length === 0 ? (
-            <div style={{ fontSize: "0.85rem", color: "#6b7280" }}>
-              No updates yet.
+            <div className="hero-actions">
+              <Link className="btn btn-secondary" href="/customer">
+                ← Back to Home
+              </Link>
             </div>
-          ) : (
-            <ul
+          </div>
+        </div>
+      </div>
+
+      <div className="page">
+        <div className="container">
+          {/* Notifications */}
+          <div className="card" style={{ marginBottom: "1rem" }}>
+            <div
               style={{
-                listStyle: "none",
-                padding: 0,
-                margin: 0,
-                maxHeight: 150,
-                overflowY: "auto",
-                fontSize: "0.85rem",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: "0.75rem",
+                flexWrap: "wrap",
               }}
             >
-              {notifications.slice(0, 5).map((n) => (
-                <li
-                  key={n.id}
-                  style={{
-                    padding: "2px 0",
-                    opacity: n.is_read ? 0.6 : 1,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.35rem",
-                  }}
-                >
-                  <span>{getNotificationIcon(n.event)}</span>
-                  <span>
-                    {new Date(n.created_at).toLocaleString()} – {n.message}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+              <div style={{ fontWeight: 900 }}>
+                Updates on your orders{" "}
+                <span style={{ fontWeight: 700, color: "var(--muted)", fontSize: "0.9rem" }}>
+                  {notificationsLoading
+                    ? "(loading...)"
+                    : unreadCount > 0
+                    ? `(${unreadCount} unread)`
+                    : "(no unread)"}
+                </span>
+              </div>
 
-        {message && (
-          <div className="alert alert-error">{message}</div>
-        )}
+              <button
+                className="btn btn-secondary"
+                type="button"
+                onClick={markAllRead}
+                disabled={unreadCount === 0}
+              >
+                Mark all read
+              </button>
+            </div>
 
-        {loadingOrders ? (
-          <p>Loading your orders...</p>
-        ) : orders.length === 0 ? (
-          <p>You don’t have any orders yet.</p>
-        ) : (
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "1rem",
-            }}
-          >
-            {orders.map((order) => {
-              const restaurantName = getRestaurantName(order.restaurants);
-              const orderLabel =
-                order.order_number ?? `#${order.id.slice(0, 8)}`;
-
-              return (
-                <div key={order.id} className="card">
-                  {/* Header row */}
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      gap: "0.75rem",
-                      flexWrap: "wrap",
-                      marginBottom: "0.5rem",
-                    }}
-                  >
-                    <div>
-                      <div
-                        style={{
-                          display: "flex",
-                          flexWrap: "wrap",
-                          gap: "0.5rem",
-                          alignItems: "center",
-                        }}
-                      >
-                        <strong>Order {orderLabel}</strong>
-                        {renderStatusBadge(order.status)}
-                      </div>
-                      <div
-                        style={{
-                          fontSize: "0.8rem",
-                          color: "#6b7280",
-                          marginTop: 2,
-                        }}
-                      >
-                        Placed:{" "}
-                        {new Date(
-                          order.created_at
-                        ).toLocaleString()}
-                      </div>
-                      <div
-                        style={{
-                          fontSize: "0.85rem",
-                          marginTop: 4,
-                        }}
-                      >
-                        Restaurant:{" "}
-                        <strong>{restaurantName}</strong>
-                      </div>
-                    </div>
-                    <div style={{ textAlign: "right" }}>
-                      <div
-                        style={{
-                          fontSize: "0.9rem",
-                          fontWeight: 600,
-                        }}
-                      >
-                        Total: $
-                        {order.total?.toFixed(2) ?? "0.00"}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Special request */}
-                  {order.special_request && (
-                    <div
+            <div style={{ marginTop: 10 }}>
+              {notifications.length === 0 ? (
+                <div style={{ color: "var(--muted)" }}>No notifications yet.</div>
+              ) : (
+                <ul style={{ listStyle: "none", padding: 0, margin: 0, maxHeight: 180, overflowY: "auto" }}>
+                  {notifications.slice(0, 10).map((n) => (
+                    <li
+                      key={n.id}
                       style={{
-                        fontSize: "0.85rem",
-                        marginBottom: "0.5rem",
-                        color: "#374151",
+                        padding: "6px 0",
+                        borderBottom: "1px solid var(--border)",
+                        opacity: n.is_read ? 0.7 : 1,
                       }}
                     >
-                      <strong>Special request: </strong>
-                      {order.special_request}
-                    </div>
-                  )}
+                      <div style={{ fontSize: "0.9rem", fontWeight: 800 }}>
+                        {n.title ?? "Update"}
+                      </div>
+                      <div style={{ color: "var(--muted)", fontSize: "0.9rem" }}>
+                        {n.message}
+                      </div>
+                      <div style={{ color: "var(--muted)", fontSize: "0.8rem", marginTop: 2 }}>
+                        {new Date(n.created_at).toLocaleString()}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
 
-                  {/* Items table */}
-                  <table
-                    style={{
-                      width: "100%",
-                      borderCollapse: "collapse",
-                      fontSize: "0.9rem",
-                      marginTop: "0.25rem",
-                    }}
-                  >
-                    <thead>
-                      <tr>
-                        <th
-                          style={{
-                            textAlign: "left",
-                            paddingBottom: 4,
-                            borderBottom: "1px solid #e5e7eb",
-                          }}
-                        >
-                          Item
-                        </th>
-                        <th
-                          style={{
-                            textAlign: "center",
-                            paddingBottom: 4,
-                            borderBottom: "1px solid #e5e7eb",
-                          }}
-                        >
-                          Qty
-                        </th>
-                        <th
-                          style={{
-                            textAlign: "right",
-                            paddingBottom: 4,
-                            borderBottom: "1px solid #e5e7eb",
-                          }}
-                        >
-                          Price
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {order.order_items.map((item) => (
-                        <tr key={item.id}>
-                          <td
-                            style={{
-                              paddingTop: 4,
-                              paddingBottom: 4,
-                            }}
-                          >
-                            {getMenuItemName(item.menu_items)}
-                          </td>
-                          <td
-                            style={{
-                              textAlign: "center",
-                              paddingTop: 4,
-                              paddingBottom: 4,
-                            }}
-                          >
-                            {item.quantity}
-                          </td>
-                          <td
-                            style={{
-                              textAlign: "right",
-                              paddingTop: 4,
-                              paddingBottom: 4,
-                            }}
-                          >
-                            $
-                            {item.price != null
-                              ? item.price.toFixed(2)
-                              : "0.00"}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+          {message && <div className="alert alert-error">{message}</div>}
 
-                  {/* Status history timeline */}
-                  {order.order_status_history &&
-                    order.order_status_history.length >
-                      0 && (
-                      <div
-                        style={{
-                          marginTop: 8,
-                          fontSize: "0.85rem",
-                        }}
+          {loadingOrders ? (
+            <div>Loading orders…</div>
+          ) : orderCards.length === 0 ? (
+            <div className="card">
+              <div style={{ fontWeight: 900, fontSize: "1.05rem" }}>No orders yet</div>
+              <div style={{ color: "var(--muted)", marginTop: 6 }}>
+                Place your first order from the customer home.
+              </div>
+              <div style={{ marginTop: 12 }}>
+                <Link className="btn btn-primary" href="/customer">
+                  Browse Restaurants
+                </Link>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+              {orderCards.map((o) => {
+                const isOpen = !!expanded[o.id];
+                const restaurantName = getRestaurantName(o.restaurants);
+                const orderLabel = o.order_number ?? `#${o.id.slice(0, 8)}`;
+                const itemCount = o.order_items?.reduce((sum, it) => sum + (it.quantity || 0), 0) ?? 0;
+
+                return (
+                  <div key={o.id} className="card">
+                    {/* Header row (collapsed view) */}
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        gap: "1rem",
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontWeight: 900, fontSize: "1.05rem" }}>
+                          {restaurantName}{" "}
+                          <span style={{ marginLeft: 10 }}>{statusBadge(o.status)}</span>
+                        </div>
+
+                        <div style={{ display: "flex", gap: "0.9rem", flexWrap: "wrap", marginTop: 6, color: "var(--muted)", fontSize: "0.92rem" }}>
+                          <div>📅 {new Date(o.created_at).toLocaleDateString()}</div>
+                          <div style={{ fontWeight: 900, color: "var(--primary)" }}>
+                            ${Number(o.total ?? 0).toFixed(2)}
+                          </div>
+                          <div>{itemCount} items</div>
+                          <div style={{ fontWeight: 900 }}>Order {orderLabel}</div>
+                        </div>
+                      </div>
+
+                      <button
+                        className="btn btn-secondary"
+                        type="button"
+                        onClick={() => setExpanded((prev) => ({ ...prev, [o.id]: !prev[o.id] }))}
+                        aria-expanded={isOpen}
                       >
-                        <strong>Status history:</strong>
-                        <ul
+                        {isOpen ? "▴" : "▾"}
+                      </button>
+                    </div>
+
+                    {/* Expanded */}
+                    {isOpen && (
+                      <div style={{ marginTop: "1rem", borderTop: "1px solid var(--border)", paddingTop: "1rem" }}>
+                        <div
                           style={{
-                            margin: "4px 0 0 0",
-                            paddingLeft: "1.1rem",
+                            display: "grid",
+                            gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+                            gap: "1rem",
                           }}
                         >
-                          {[...order.order_status_history]
-                            .sort(
-                              (a, b) =>
-                                new Date(
-                                  a.changed_at
-                                ).getTime() -
-                                new Date(
-                                  b.changed_at
-                                ).getTime()
-                            )
-                            .map((h) => (
-                              <li key={h.id}>
-                                {new Date(
-                                  h.changed_at
-                                ).toLocaleString()}{" "}
-                                –{" "}
-                                {h.old_status
-                                  ? `${formatStatus(
-                                      h.old_status
-                                    )} → `
-                                  : ""}
-                                <strong>
-                                  {formatStatus(
-                                    h.new_status
-                                  )}
-                                </strong>
-                              </li>
-                            ))}
-                        </ul>
+                          {/* Left */}
+                          <div>
+                            <div style={{ fontSize: "0.9rem", color: "var(--muted)", fontWeight: 800 }}>
+                              Order ID
+                            </div>
+                            <div style={{ fontWeight: 900, marginBottom: 10 }}>
+                              {orderLabel}
+                            </div>
+
+                            <div style={{ fontSize: "0.9rem", color: "var(--muted)", fontWeight: 800 }}>
+                              Special Instructions
+                            </div>
+                            <div
+                              style={{
+                                marginTop: 6,
+                                padding: "0.75rem",
+                                borderRadius: 10,
+                                border: "1px solid var(--border)",
+                                background: "var(--surface-2)",
+                              }}
+                            >
+                              {o.special_request ? o.special_request : <span style={{ color: "var(--muted)" }}>None</span>}
+                            </div>
+
+                            {/* Customer actions */}
+                            <div style={{ marginTop: 12, display: "flex", gap: "0.6rem", flexWrap: "wrap" }}>
+                              {o.status === "changes_requested" && (
+                                <button className="btn btn-primary" onClick={() => handleAcceptChanges(o.id)}>
+                                  ✓ Accept changes
+                                </button>
+                              )}
+
+                              {o.status !== "completed" && o.status !== "cancelled" && (
+                                <button className="btn btn-danger" onClick={() => handleCancelOrder(o.id)}>
+                                  ✕ Cancel order
+                                </button>
+                              )}
+                            </div>
+
+                            {/* Invoice status */}
+                            <div style={{ marginTop: 14 }}>
+                              <div style={{ fontSize: "0.9rem", color: "var(--muted)", fontWeight: 800 }}>
+                                Invoice
+                              </div>
+                              <div style={{ marginTop: 6 }}>
+                                {o.invoices && o.invoices.length > 0 ? (
+                                  <div style={{ fontWeight: 900 }}>
+                                    {o.invoices[0].is_paid ? "Paid" : "Unpaid"} — $
+                                    {Number(o.invoices[0].total ?? 0).toFixed(2)}
+                                  </div>
+                                ) : (
+                                  <div style={{ color: "var(--muted)" }}>No invoice yet</div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Right: items list */}
+                          <div>
+                            <div style={{ fontSize: "0.9rem", color: "var(--muted)", fontWeight: 800 }}>
+                              Order Items
+                            </div>
+
+                            <div
+                              style={{
+                                marginTop: 10,
+                                maxHeight: 260,
+                                overflowY: "auto",
+                                paddingRight: 6,
+                              }}
+                            >
+                              {o.order_items.map((it) => (
+                                <div
+                                  key={it.id}
+                                  style={{
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    gap: "1rem",
+                                    padding: "0.75rem",
+                                    borderRadius: 10,
+                                    border: "1px solid var(--border)",
+                                    background: "var(--surface-2)",
+                                    marginBottom: 10,
+                                  }}
+                                >
+                                  <div>
+                                    <div style={{ fontWeight: 900 }}>
+                                      {getMenuItemName(it.menu_items)}
+                                    </div>
+                                    <div style={{ color: "var(--muted)", fontSize: "0.9rem" }}>
+                                      Quantity: {it.quantity}
+                                    </div>
+                                  </div>
+                                  <div style={{ fontWeight: 900 }}>
+                                    ${Number(it.price ?? 0).toFixed(2)}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+
+                            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 10 }}>
+                              <div style={{ fontWeight: 900, fontSize: "1.05rem" }}>Total:</div>
+                              <div style={{ fontWeight: 900, fontSize: "1.05rem", color: "var(--primary)" }}>
+                                ${Number(o.total ?? 0).toFixed(2)}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     )}
-
-                  {/* Action buttons */}
-                  <div
-                    style={{
-                      display: "flex",
-                      flexWrap: "wrap",
-                      gap: "0.75rem",
-                      marginTop: "0.75rem",
-                    }}
-                  >
-                    {order.status === "changes_requested" && (
-                      <>
-                        <button
-                          className="btn btn-primary"
-                          onClick={() =>
-                            handleAcceptChanges(
-                              order.id
-                            )
-                          }
-                          disabled={
-                            actionOrderId === order.id
-                          }
-                        >
-                          {actionOrderId === order.id
-                            ? "Accepting..."
-                            : "Accept Changes"}
-                        </button>
-
-                        <button
-                          className="btn btn-danger"
-                          onClick={() =>
-                            handleCancelOrder(
-                              order.id
-                            )
-                          }
-                          disabled={
-                            actionOrderId === order.id
-                          }
-                        >
-                          {actionOrderId === order.id
-                            ? "Cancelling..."
-                            : "Cancel Order"}
-                        </button>
-                      </>
-                    )}
-
-                    {order.status === "pending" && (
-                      <button
-                        className="btn btn-danger"
-                        onClick={() =>
-                          handleCancelOrder(
-                            order.id
-                          )
-                        }
-                        disabled={
-                          actionOrderId === order.id
-                        }
-                      >
-                        {actionOrderId === order.id
-                          ? "Cancelling..."
-                          : "Cancel Order"}
-                      </button>
-                    )}
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
