@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import AppShell from "@/components/AppShell";
+import "leaflet/dist/leaflet.css";
+
 
 export const metadata: Metadata = {
   title: "Caterly – Smart Catering Platform",

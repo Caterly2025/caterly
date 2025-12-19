@@ -5,6 +5,13 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { useSupabaseUser } from "@/hooks/useSupabaseUser";
 
+import dynamic from "next/dynamic";
+
+const RestaurantMap = dynamic(() => import("@/components/RestaurantMap"), {
+  ssr: false,
+});
+
+
 type RestaurantRow = {
   id: string;
   name: string;
@@ -12,6 +19,8 @@ type RestaurantRow = {
   address: string | null;
   zip_code: string | null;
   primary_phone: string | null;
+  latitude: string | null;
+  longitude: string | null;
 };
 
 type MenuRow = {
@@ -184,35 +193,13 @@ export default function CustomerHomePage() {
 
             {/* Map placeholder (we’ll wire Leaflet next once we store lat/lng or geocode by zip) */}
             {view === "map" ? (
-              <div
-                style={{
-                  width: "100%",
-                  height: 420,
-                  borderRadius: 12,
-                  border: "1px solid var(--border)",
-                  overflow: "hidden",
-                  background: "linear-gradient(180deg, rgba(2,132,199,0.10), rgba(2,132,199,0.02))",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  padding: "1rem",
+              <RestaurantMap
+                restaurants={restaurants as any}
+                onSelect={(r: any) => {
+                  setSelectedRestaurant(r);
+                  void loadMenuForRestaurant(r.id);
                 }}
-              >
-                <div style={{ textAlign: "center", maxWidth: 560 }}>
-                  <div style={{ fontSize: "1.25rem", fontWeight: 900, marginBottom: 6 }}>
-                    Map View (next)
-                  </div>
-                  <div style={{ color: "var(--muted)" }}>
-                    You said you like selecting restaurants from a map — we’ll add Leaflet pins
-                    once restaurants have <strong>lat/lng</strong> (or we geocode from zip).
-                  </div>
-                  <div style={{ marginTop: 12 }}>
-                    <button className="btn btn-secondary" onClick={() => setView("list")}>
-                      Use List View for now
-                    </button>
-                  </div>
-                </div>
-              </div>
+              />
             ) : (
               <div>
                 {loadingRestaurants ? (
