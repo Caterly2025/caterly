@@ -432,7 +432,8 @@ export default function OwnerPage() {
                     gap: "0.35rem",
                   }}
                 >
-                  <span>{getNotificationIcon(n.event)}</span>
+                  <span>{getNotificationIcon(n.event ?? "unknown")}</span>
+
                   <span>
                     {new Date(n.created_at).toLocaleString()} – {n.message}
                   </span>
