@@ -6,6 +6,18 @@ import { supabase } from "@/lib/supabaseClient";
 import { useSupabaseUser } from "@/hooks/useSupabaseUser";
 import { useNotifications } from "@/hooks/useNotifications";
 
+/** Match your notifications table now that you added title */
+type NotificationRow = {
+  id: string;
+  title: string | null;
+  message: string;
+  created_at: string;
+  is_read: boolean;
+  order_id?: string | null;
+  order_number?: string | null;
+  type?: string | null;
+};
+
 type RestaurantRef =
   | { id: string; name: string }
   | { id: string; name: string }[]
@@ -15,10 +27,7 @@ type OrderItemRow = {
   id: string;
   quantity: number;
   price: number | null;
-  menu_items:
-    | { name: string }
-    | { name: string }[]
-    | null;
+  menu_items: { name: string } | { name: string }[] | null;
 };
 
 type InvoiceRow = {
@@ -40,14 +49,6 @@ type OrderRow = {
   invoices: InvoiceRow[];
 };
 
-type StatusType =
-  | "pending"
-  | "owner_review"
-  | "changes_requested"
-  | "customer_accepted"
-  | "completed"
-  | "cancelled";
-
 const formatStatus = (s: string) => {
   switch (s) {
     case "pending":
@@ -67,15 +68,16 @@ const formatStatus = (s: string) => {
   }
 };
 
-const statusBadge = (s: string) => {
-  let cls = "badge badge-info";
-  if (s === "completed") cls = "badge badge-success";
-  if (s === "pending") cls = "badge badge-info";
-  if (s === "changes_requested") cls = "badge badge-warn";
-  if (s === "cancelled") cls = "badge badge-danger";
-
-  return <span className={cls}>{formatStatus(s)}</span>;
+const badgeClassForStatus = (s: string) => {
+  if (s === "completed") return "badge badge-success";
+  if (s === "changes_requested") return "badge badge-warn";
+  if (s === "cancelled") return "badge badge-danger";
+  return "badge badge-info";
 };
+
+const statusBadge = (s: string) => (
+  <span className={badgeClassForStatus(s)}>{formatStatus(s)}</span>
+);
 
 const getRestaurantName = (r: RestaurantRef): string => {
   if (!r) return "Unknown restaurant";
@@ -89,11 +91,11 @@ const getMenuItemName = (m: OrderItemRow["menu_items"]): string => {
   return m.name;
 };
 
-const sendOrderEmailEvent = async (
+async function sendOrderEmailEvent(
   orderId: string,
-  event: "order_created" | "order_status_changed" | "invoice_created",
-  newStatus?: string
-) => {
+  event: "order_status_changed",
+  newStatus: string
+) {
   try {
     await supabase.functions.invoke("send-order-email", {
       body: { orderId, event, newStatus },
@@ -101,7 +103,7 @@ const sendOrderEmailEvent = async (
   } catch (err) {
     console.error("Error invoking send-order-email:", err);
   }
-};
+}
 
 export default function CustomerOrdersPage() {
   const { user, loading: authLoading } = useSupabaseUser();
@@ -109,15 +111,13 @@ export default function CustomerOrdersPage() {
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
-
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
-  const {
-    notifications,
-    unreadCount,
-    loading: notificationsLoading,
-    markAllRead,
-  } = useNotifications("customer");
+  const notifHook = useNotifications("customer");
+  const notifications = (notifHook.notifications || []) as NotificationRow[];
+  const unreadCount = notifHook.unreadCount ?? 0;
+  const notificationsLoading = notifHook.loading ?? false;
+  const markAllRead = notifHook.markAllRead;
 
   const loadOrders = async (customerId: string) => {
     setLoadingOrders(true);
@@ -133,22 +133,9 @@ export default function CustomerOrdersPage() {
         special_request,
         total,
         created_at,
-        restaurants (
-          id,
-          name
-        ),
-        order_items (
-          id,
-          quantity,
-          price,
-          menu_items ( name )
-        ),
-        invoices (
-          id,
-          total,
-          is_paid,
-          created_at
-        )
+        restaurants ( id, name ),
+        order_items ( id, quantity, price, menu_items ( name ) ),
+        invoices ( id, total, is_paid, created_at )
       `
       )
       .eq("customer_id", customerId)
@@ -165,7 +152,6 @@ export default function CustomerOrdersPage() {
     const rows = (data || []) as OrderRow[];
     setOrders(rows);
 
-    // Auto-expand latest order if none expanded yet
     if (rows.length > 0 && Object.keys(expanded).length === 0) {
       setExpanded({ [rows[0].id]: true });
     }
@@ -225,7 +211,11 @@ export default function CustomerOrdersPage() {
   const orderCards = useMemo(() => orders, [orders]);
 
   if (authLoading) {
-    return <div className="page"><div className="container">Checking authentication…</div></div>;
+    return (
+      <div className="page">
+        <div className="container">Checking authentication…</div>
+      </div>
+    );
   }
 
   if (!user) {
@@ -243,7 +233,8 @@ export default function CustomerOrdersPage() {
             <div className="card">
               <p>You must be logged in to view your orders.</p>
               <p>
-                Go to <Link href="/auth/customer">Customer Auth</Link> to login or sign up.
+                Go to <Link href="/auth/customer">Customer Auth</Link> to login or
+                sign up.
               </p>
             </div>
           </div>
@@ -254,10 +245,16 @@ export default function CustomerOrdersPage() {
 
   return (
     <>
-      {/* Hero like screenshot */}
       <div className="hero">
         <div className="hero-inner">
-          <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap" }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              gap: "1rem",
+              flexWrap: "wrap",
+            }}
+          >
             <div>
               <h1 className="hero-title">My Orders</h1>
               <div className="hero-subtitle">Track and view your orders</div>
@@ -287,7 +284,13 @@ export default function CustomerOrdersPage() {
             >
               <div style={{ fontWeight: 900 }}>
                 Updates on your orders{" "}
-                <span style={{ fontWeight: 700, color: "var(--muted)", fontSize: "0.9rem" }}>
+                <span
+                  style={{
+                    fontWeight: 700,
+                    color: "var(--muted)",
+                    fontSize: "0.9rem",
+                  }}
+                >
                   {notificationsLoading
                     ? "(loading...)"
                     : unreadCount > 0
@@ -310,24 +313,37 @@ export default function CustomerOrdersPage() {
               {notifications.length === 0 ? (
                 <div style={{ color: "var(--muted)" }}>No notifications yet.</div>
               ) : (
-                <ul style={{ listStyle: "none", padding: 0, margin: 0, maxHeight: 180, overflowY: "auto" }}>
+                <ul
+                  style={{
+                    listStyle: "none",
+                    padding: 0,
+                    margin: 0,
+                    maxHeight: 180,
+                    overflowY: "auto",
+                  }}
+                >
                   {notifications.slice(0, 10).map((n) => (
                     <li
                       key={n.id}
                       style={{
-                        padding: "6px 0",
+                        padding: "10px 0",
                         borderBottom: "1px solid var(--border)",
                         opacity: n.is_read ? 0.7 : 1,
                       }}
                     >
-                      <div style={{ fontSize: "0.9rem", fontWeight: 800 }}>
-                        {"Order update"}
+                      <div style={{ fontSize: "0.92rem", fontWeight: 900 }}>
+                        {n.title ?? "Update"}
                       </div>
                       <div style={{ color: "var(--muted)", fontSize: "0.9rem" }}>
                         {n.message}
                       </div>
-
-                      <div style={{ color: "var(--muted)", fontSize: "0.8rem", marginTop: 2 }}>
+                      <div
+                        style={{
+                          color: "var(--muted)",
+                          fontSize: "0.8rem",
+                          marginTop: 2,
+                        }}
+                      >
                         {new Date(n.created_at).toLocaleString()}
                       </div>
                     </li>
@@ -343,7 +359,9 @@ export default function CustomerOrdersPage() {
             <div>Loading orders…</div>
           ) : orderCards.length === 0 ? (
             <div className="card">
-              <div style={{ fontWeight: 900, fontSize: "1.05rem" }}>No orders yet</div>
+              <div style={{ fontWeight: 900, fontSize: "1.05rem" }}>
+                No orders yet
+              </div>
               <div style={{ color: "var(--muted)", marginTop: 6 }}>
                 Place your first order from the customer home.
               </div>
@@ -359,11 +377,12 @@ export default function CustomerOrdersPage() {
                 const isOpen = !!expanded[o.id];
                 const restaurantName = getRestaurantName(o.restaurants);
                 const orderLabel = o.order_number ?? `#${o.id.slice(0, 8)}`;
-                const itemCount = o.order_items?.reduce((sum, it) => sum + (it.quantity || 0), 0) ?? 0;
+                const itemCount =
+                  o.order_items?.reduce((sum, it) => sum + (it.quantity || 0), 0) ??
+                  0;
 
                 return (
                   <div key={o.id} className="card">
-                    {/* Header row (collapsed view) */}
                     <div
                       style={{
                         display: "flex",
@@ -379,7 +398,16 @@ export default function CustomerOrdersPage() {
                           <span style={{ marginLeft: 10 }}>{statusBadge(o.status)}</span>
                         </div>
 
-                        <div style={{ display: "flex", gap: "0.9rem", flexWrap: "wrap", marginTop: 6, color: "var(--muted)", fontSize: "0.92rem" }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: "0.9rem",
+                            flexWrap: "wrap",
+                            marginTop: 6,
+                            color: "var(--muted)",
+                            fontSize: "0.92rem",
+                          }}
+                        >
                           <div>📅 {new Date(o.created_at).toLocaleDateString()}</div>
                           <div style={{ fontWeight: 900, color: "var(--primary)" }}>
                             ${Number(o.total ?? 0).toFixed(2)}
@@ -392,33 +420,53 @@ export default function CustomerOrdersPage() {
                       <button
                         className="btn btn-secondary"
                         type="button"
-                        onClick={() => setExpanded((prev) => ({ ...prev, [o.id]: !prev[o.id] }))}
+                        onClick={() =>
+                          setExpanded((prev) => ({ ...prev, [o.id]: !prev[o.id] }))
+                        }
                         aria-expanded={isOpen}
                       >
                         {isOpen ? "▴" : "▾"}
                       </button>
                     </div>
 
-                    {/* Expanded */}
                     {isOpen && (
-                      <div style={{ marginTop: "1rem", borderTop: "1px solid var(--border)", paddingTop: "1rem" }}>
+                      <div
+                        style={{
+                          marginTop: "1rem",
+                          borderTop: "1px solid var(--border)",
+                          paddingTop: "1rem",
+                        }}
+                      >
                         <div
                           style={{
                             display: "grid",
-                            gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+                            gridTemplateColumns:
+                              "repeat(auto-fit, minmax(280px, 1fr))",
                             gap: "1rem",
                           }}
                         >
-                          {/* Left */}
+                          {/* Left column */}
                           <div>
-                            <div style={{ fontSize: "0.9rem", color: "var(--muted)", fontWeight: 800 }}>
+                            <div
+                              style={{
+                                fontSize: "0.9rem",
+                                color: "var(--muted)",
+                                fontWeight: 800,
+                              }}
+                            >
                               Order ID
                             </div>
                             <div style={{ fontWeight: 900, marginBottom: 10 }}>
                               {orderLabel}
                             </div>
 
-                            <div style={{ fontSize: "0.9rem", color: "var(--muted)", fontWeight: 800 }}>
+                            <div
+                              style={{
+                                fontSize: "0.9rem",
+                                color: "var(--muted)",
+                                fontWeight: 800,
+                              }}
+                            >
                               Special Instructions
                             </div>
                             <div
@@ -430,27 +478,48 @@ export default function CustomerOrdersPage() {
                                 background: "var(--surface-2)",
                               }}
                             >
-                              {o.special_request ? o.special_request : <span style={{ color: "var(--muted)" }}>None</span>}
+                              {o.special_request ? (
+                                o.special_request
+                              ) : (
+                                <span style={{ color: "var(--muted)" }}>None</span>
+                              )}
                             </div>
 
-                            {/* Customer actions */}
-                            <div style={{ marginTop: 12, display: "flex", gap: "0.6rem", flexWrap: "wrap" }}>
+                            <div
+                              style={{
+                                marginTop: 12,
+                                display: "flex",
+                                gap: "0.6rem",
+                                flexWrap: "wrap",
+                              }}
+                            >
                               {o.status === "changes_requested" && (
-                                <button className="btn btn-primary" onClick={() => handleAcceptChanges(o.id)}>
+                                <button
+                                  className="btn btn-primary"
+                                  onClick={() => handleAcceptChanges(o.id)}
+                                >
                                   ✓ Accept changes
                                 </button>
                               )}
 
                               {o.status !== "completed" && o.status !== "cancelled" && (
-                                <button className="btn btn-danger" onClick={() => handleCancelOrder(o.id)}>
+                                <button
+                                  className="btn btn-danger"
+                                  onClick={() => handleCancelOrder(o.id)}
+                                >
                                   ✕ Cancel order
                                 </button>
                               )}
                             </div>
 
-                            {/* Invoice status */}
                             <div style={{ marginTop: 14 }}>
-                              <div style={{ fontSize: "0.9rem", color: "var(--muted)", fontWeight: 800 }}>
+                              <div
+                                style={{
+                                  fontSize: "0.9rem",
+                                  color: "var(--muted)",
+                                  fontWeight: 800,
+                                }}
+                              >
                                 Invoice
                               </div>
                               <div style={{ marginTop: 6 }}>
@@ -460,15 +529,23 @@ export default function CustomerOrdersPage() {
                                     {Number(o.invoices[0].total ?? 0).toFixed(2)}
                                   </div>
                                 ) : (
-                                  <div style={{ color: "var(--muted)" }}>No invoice yet</div>
+                                  <div style={{ color: "var(--muted)" }}>
+                                    No invoice yet
+                                  </div>
                                 )}
                               </div>
                             </div>
                           </div>
 
-                          {/* Right: items list */}
+                          {/* Right column */}
                           <div>
-                            <div style={{ fontSize: "0.9rem", color: "var(--muted)", fontWeight: 800 }}>
+                            <div
+                              style={{
+                                fontSize: "0.9rem",
+                                color: "var(--muted)",
+                                fontWeight: 800,
+                              }}
+                            >
                               Order Items
                             </div>
 
@@ -498,7 +575,12 @@ export default function CustomerOrdersPage() {
                                     <div style={{ fontWeight: 900 }}>
                                       {getMenuItemName(it.menu_items)}
                                     </div>
-                                    <div style={{ color: "var(--muted)", fontSize: "0.9rem" }}>
+                                    <div
+                                      style={{
+                                        color: "var(--muted)",
+                                        fontSize: "0.9rem",
+                                      }}
+                                    >
                                       Quantity: {it.quantity}
                                     </div>
                                   </div>
@@ -509,9 +591,23 @@ export default function CustomerOrdersPage() {
                               ))}
                             </div>
 
-                            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 10 }}>
-                              <div style={{ fontWeight: 900, fontSize: "1.05rem" }}>Total:</div>
-                              <div style={{ fontWeight: 900, fontSize: "1.05rem", color: "var(--primary)" }}>
+                            <div
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                marginTop: 10,
+                              }}
+                            >
+                              <div style={{ fontWeight: 900, fontSize: "1.05rem" }}>
+                                Total:
+                              </div>
+                              <div
+                                style={{
+                                  fontWeight: 900,
+                                  fontSize: "1.05rem",
+                                  color: "var(--primary)",
+                                }}
+                              >
                                 ${Number(o.total ?? 0).toFixed(2)}
                               </div>
                             </div>

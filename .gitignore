@@ -44,3 +44,5 @@ supabase/.temp/cli-latest
 supabase/functions/send-order-email/.npmrc
 supabase/functions/send-order-email/deno.json
 supabase/functions/send-order-email/index.ts
+src.7z
+src.zip

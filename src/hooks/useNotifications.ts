@@ -13,6 +13,7 @@ export type NotificationRow = {
   message: string;
   created_at: string;
   is_read: boolean;
+  title: string;
 };
 
 type RoleFilter = "customer" | "owner" | "any";
