@@ -1,3 +1,178 @@
+# Caterly
+
+Caterly is a lightweight, role-based catering and order-management platform built for small and medium restaurants.  
+It enables customers to place catering orders, restaurant owners/employees to review and modify orders, and both sides to communicate clearly through notifications.
+
+The goal is to ship a **simple MVP suitable for real restaurant pilot onboarding**, then iterate toward a full-featured catering platform.
+
+---
+
+## 🔧 Tech Stack
+
+### Frontend
+- **Next.js (App Router, TypeScript)**
+- Deployed on **Vercel**
+- Responsive UI with light / dark / system themes
+- Map-based restaurant discovery using **Leaflet**
+
+### Backend
+- **Supabase**
+  - PostgreSQL database
+  - Supabase Auth (email/password, extensible to Google/phone)
+  - Row-Level Security (RLS)
+  - Realtime subscriptions (notifications)
+  - Edge Functions (planned for email/SMS)
+
+---
+
+## 👥 User Roles
+
+### Customer
+- Browse restaurants (list or map view)
+- View menus and menu items
+- Create and submit catering orders
+- Track order status
+- Receive notifications when orders change
+- Accept or reject owner-proposed changes
+
+### Owner / Employee
+- View incoming orders for assigned restaurant(s)
+- Review and edit customer orders
+- Send modified orders back for customer approval
+- Generate invoices
+- Receive notifications on new orders and customer actions
+
+### Admin (lightweight)
+- System-level visibility (not required for day-to-day operations)
+- No approval required for owner signup
+
+---
+
+## 🔁 Order Lifecycle (Current)
+
+1. Customer creates an order (`status = pending`)
+2. Owner reviews order (`status = owner_review`)
+3. Owner may modify and send back (`status = changes_requested`)
+4. Customer accepts changes (`status = customer_accepted`)
+5. Owner completes order and generates invoice
+6. Order moves to `completed` or `cancelled`
+
+Statuses are enforced consistently in both UI and database.
+
+---
+
+## 🔔 Notifications
+
+- Stored in `user_notifications` table
+- Support:
+  - `title`
+  - `message`
+  - `event`
+  - `role` (customer / owner)
+  - `is_read`
+- Realtime updates via Supabase subscriptions
+- Displayed in:
+  - Customer “My Orders” page
+  - Owner dashboard
+
+---
+
+## 🗺️ Restaurant Discovery
+
+- Restaurants store:
+  - Name
+  - Cuisine type
+  - Address (street, city, state, zip)
+  - Primary phone
+  - Latitude / Longitude
+- Customer home supports:
+  - List view
+  - Map view (Leaflet)
+- Selecting a restaurant loads menus dynamically
+
+---
+
+## 🎨 UI / UX
+
+- Green-themed modern UI inspired by CraveCart
+- Responsive cards and buttons
+- Clear visual affordances for clickable actions
+- Animated transitions between light and dark themes
+- Role-aware navigation (Customer / Owner / Admin)
+
+---
+
+## 🚧 Current Status
+
+### ✅ Completed
+- Authentication (email/password)
+- Role separation (customer vs owner)
+- Customer ordering flow
+- Owner review/edit flow
+- Notifications with realtime updates
+- Invoices (basic)
+- Restaurant map discovery
+- Dark / light / system theming
+- Deployed MVP on Vercel
+
+### ⚠️ Known limitations
+- Cart flow is basic (no persistent cart yet)
+- Email/SMS notifications not yet enabled
+- Order numbers are UUID-based (human-readable IDs planned)
+- Map uses stored lat/lng (no live geocoding yet)
+
+---
+
+## 🎯 Next MVP Steps (High Priority)
+
+1. **Cart & Order Editing**
+   - Add/remove items before submission
+   - Persist draft orders
+
+2. **Email Notifications**
+   - Order created
+   - Owner requested changes
+   - Customer accepted changes
+   - Invoice generated
+
+3. **Human-Readable Order Numbers**
+   - Format: `RESTID_YYYYMMDD_SEQ`
+   - Daily sequence starting at 100
+
+4. **Employee Management**
+   - Owner can add/remove employees
+   - Employees handle orders (owner not required)
+
+5. **Improved Status Timeline**
+   - Visual timeline per order
+   - Clear state transitions
+
+---
+
+## 🔮 Future Enhancements
+
+- SMS notifications (Twilio)
+- Google OAuth & phone auth
+- Customer address book
+- Delivery scheduling
+- Tip & service fee handling
+- Payment integration (Stripe)
+- Restaurant analytics dashboard
+- Multi-location restaurants
+- Public restaurant profile pages
+
+---
+
+## 🧪 Local Development
+
+```bash
+npm install
+npm run dev
+
+```
+
+# ignore below
+
 <<<<<<< HEAD
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
