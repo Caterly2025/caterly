@@ -26,6 +26,10 @@ function AppShell({ children }: { children: React.ReactNode }) {
 
   const [theme, setTheme] = useState<ThemeMode>("system");
 
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+  };
+
   // Load theme from localStorage on mount
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -70,27 +74,6 @@ function AppShell({ children }: { children: React.ReactNode }) {
     void loadProfile();
   }, [user]);
 
-  // Build nav links based on role
-  const navLinks =
-    role === "owner"
-      ? [
-          { href: "/owner", label: "Owner Orders" },
-          { href: "/owner/employees", label: "Employees" },
-          { href: "/customer", label: "Customer View" },
-        ]
-      : role === "customer"
-      ? [
-          { href: "/customer", label: "Browse Menu" },
-          { href: "/customer/orders", label: "My Orders" },
-          { href: "/customer/invoices", label: "My Invoices" },
-        ]
-      : role === "admin"
-      ? [{ href: "/admin", label: "Admin Dashboard" }]
-      : [
-          { href: "/customer", label: "Customer" },
-          { href: "/owner", label: "Owner" },
-        ];
-
   const roleLabel =
     role === "owner"
       ? "Owner"
@@ -115,23 +98,38 @@ function AppShell({ children }: { children: React.ReactNode }) {
             </Link>
           </div>
 
-          {/* Middle: Role-based links */}
+          {/* Middle: top-level navigation */}
           <nav className="nav-links">
-            {navLinks.map((link) => (
-              <Link key={link.href} href={link.href} className="nav-link">
-                {link.label}
-              </Link>
-            ))}
+            <Link href="/customer" className="nav-link">
+              Customer
+            </Link>
+            <Link href="/owner" className="nav-link">
+              Owner
+            </Link>
+            <Link href="/admin" className="nav-link">
+              Admin
+            </Link>
           </nav>
 
-          {/* Right: role + theme toggle */}
+          {/* Right: profile + auth + theme toggle */}
           <div className="nav-right">
-            <div className="role-pill">
-              <span className="role-dot" />
-              <span className="role-text">
-                {authLoading ? "Checking..." : roleLabel}
+            <div className="profile-chip">
+              <span className="profile-label">User</span>
+              <span className="profile-value">
+                {authLoading ? "Checking..." : user?.email ?? "Guest"}
               </span>
+              <span className="profile-role">{roleLabel}</span>
             </div>
+
+            {user ? (
+              <button type="button" className="btn btn-secondary" onClick={handleLogout}>
+                Logout
+              </button>
+            ) : (
+              <Link href="/auth" className="btn btn-primary">
+                Login / Signup
+              </Link>
+            )}
 
             <div className="theme-toggle">
               <button
@@ -165,6 +163,31 @@ function AppShell({ children }: { children: React.ReactNode }) {
                 🌙
               </button>
             </div>
+          </div>
+        </div>
+
+        <div className="sub-nav">
+          <div className="sub-nav-group">
+            <span className="sub-nav-title">Customer</span>
+            <Link href="/customer/orders" className="sub-nav-link">
+              My Orders
+            </Link>
+            <Link href="/customer/invoices" className="sub-nav-link">
+              Invoices
+            </Link>
+          </div>
+
+          <div className="sub-nav-group">
+            <span className="sub-nav-title">Owner</span>
+            <Link href="/admin" className="sub-nav-link">
+              Admin
+            </Link>
+            <Link href="/owner/onboarding" className="sub-nav-link">
+              Onboarding
+            </Link>
+            <Link href="/owner/employee" className="sub-nav-link">
+              Employees
+            </Link>
           </div>
         </div>
       </header>
