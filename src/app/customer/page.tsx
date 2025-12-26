@@ -48,7 +48,7 @@ export default function CustomerHomePage() {
     const { data, error } = await supabase
       .from("restaurants")
       .select(
-        "id,name,cuisine_type,address,city,state,zip_code,primary_phone,latitude,longitude"
+        "id,name,description,address,city,state,zip_code,primary_phone,latitude,longitude"
       )
       .order("name", { ascending: true });
 
@@ -258,7 +258,7 @@ export default function CustomerHomePage() {
                     </div>
 
                     <div style={{ color: "var(--muted)", fontSize: "0.92rem" }}>
-                      {r.cuisine_type ? <div>{r.cuisine_type}</div> : null}
+                      {r.description ? <div>{r.description}</div> : null}
                       <div>
                         {[r.address, r.city, r.state, r.zip_code]
                           .filter(Boolean)

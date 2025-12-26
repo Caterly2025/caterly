@@ -54,7 +54,7 @@ export default function OwnerOnboarding() {
     const { error } = await supabase.from("restaurants").insert({
       owner_id: user.id,
       name,
-      cuisine_type: cuisine,
+      description: cuisine,
       address,
       zip_code: zip,
       primary_phone: phone,
