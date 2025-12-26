@@ -9,6 +9,7 @@ export default function AuthPage() {
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [oauthLoading, setOauthLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,6 +45,23 @@ export default function AuthPage() {
       setMessage("Unexpected error.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGoogleAuth = async () => {
+    setMessage(null);
+    setOauthLoading(true);
+
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/`,
+      },
+    });
+
+    if (error) {
+      setMessage(error.message);
+      setOauthLoading(false);
     }
   };
 
@@ -98,6 +116,12 @@ export default function AuthPage() {
             : "Create Account"}
         </button>
       </form>
+
+      <div style={{ margin: "16px 0" }}>
+        <button type="button" onClick={handleGoogleAuth} disabled={oauthLoading}>
+          {oauthLoading ? "Redirecting..." : "Continue with Google"}
+        </button>
+      </div>
 
       <div style={{ marginTop: 16 }}>
         {mode === "signin" ? (

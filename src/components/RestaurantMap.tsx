@@ -15,7 +15,7 @@ L.Icon.Default.mergeOptions({
 export type MapRestaurant = {
   id: string;
   name: string;
-  cuisine_type: string | null;
+  description: string | null;
   address: string | null;
   city: string | null;
   state: string | null;
@@ -69,8 +69,8 @@ export default function RestaurantMap({
             <Popup>
               <div style={{ minWidth: 240 }}>
                 <div style={{ fontWeight: 900, marginBottom: 4 }}>{r.name}</div>
-                {r.cuisine_type ? (
-                  <div style={{ fontSize: 12, opacity: 0.85 }}>{r.cuisine_type}</div>
+                {r.description ? (
+                  <div style={{ fontSize: 12, opacity: 0.85 }}>{r.description}</div>
                 ) : null}
 
                 <div style={{ fontSize: 12, marginTop: 6, opacity: 0.9 }}>

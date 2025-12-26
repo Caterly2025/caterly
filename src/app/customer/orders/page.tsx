@@ -23,6 +23,14 @@ type RestaurantRef =
   | { id: string; name: string }[]
   | null;
 
+type OrderStatusHistoryRow = {
+  id: string;
+  old_status: string | null;
+  new_status: string;
+  changed_at: string;
+  changed_by?: string | null;
+};
+
 type OrderItemRow = {
   id: string;
   quantity: number;
@@ -47,37 +55,88 @@ type OrderRow = {
   restaurants: RestaurantRef;
   order_items: OrderItemRow[];
   invoices: InvoiceRow[];
+  order_status_history?: OrderStatusHistoryRow[];
 };
+const STATUS_FLOW = [
+  { key: "ordered", label: "Ordered" },
+  { key: "owner_accepted", label: "Owner accepted" },
+  { key: "customer_accepted", label: "Customer accepted" },
+  { key: "invoiced", label: "Invoiced" },
+  { key: "paid", label: "Paid" },
+  { key: "scheduled", label: "Scheduled" },
+  { key: "delivered", label: "Delivered" },
+] as const;
+
+type StatusType = (typeof STATUS_FLOW)[number]["key"] | "cancelled";
 
 const formatStatus = (s: string) => {
   switch (s) {
+    case "ordered":
+      return "Ordered";
+    case "owner_accepted":
+      return "Owner accepted";
+    case "customer_accepted":
+      return "Customer accepted";
+    case "invoiced":
+      return "Invoiced";
+    case "paid":
+      return "Paid";
+    case "scheduled":
+      return "Scheduled";
+    case "delivered":
+      return "Delivered";
+    case "cancelled":
+      return "Cancelled";
     case "pending":
       return "Submitted";
     case "owner_review":
       return "Reviewed";
-    case "changes_requested":
-      return "Changes requested";
-    case "customer_accepted":
-      return "Accepted";
     case "completed":
       return "Completed";
-    case "cancelled":
-      return "Cancelled";
     default:
       return s;
   }
 };
 
 const badgeClassForStatus = (s: string) => {
-  if (s === "completed") return "badge badge-success";
-  if (s === "changes_requested") return "badge badge-warn";
+  if (s === "delivered") return "badge badge-success";
+  if (s === "paid" || s === "scheduled") return "badge badge-info";
   if (s === "cancelled") return "badge badge-danger";
-  return "badge badge-info";
+  return "badge badge-secondary";
 };
 
 const statusBadge = (s: string) => (
   <span className={badgeClassForStatus(s)}>{formatStatus(s)}</span>
 );
+
+const normalizeStatus = (status: string): StatusType => {
+  switch (status) {
+    case "pending":
+      return "ordered";
+    case "owner_review":
+      return "owner_accepted";
+    case "completed":
+      return "delivered";
+    default:
+      return status as StatusType;
+  }
+};
+
+const deriveEffectiveStatus = (order: OrderRow): StatusType => {
+  const normalized = normalizeStatus(order.status);
+  const invoice = order.invoices?.[0];
+
+  if (normalized === "customer_accepted" && invoice) {
+    if (invoice.is_paid) return "paid";
+    return "invoiced";
+  }
+
+  if (normalized === "invoiced" && invoice?.is_paid) {
+    return "paid";
+  }
+
+  return normalized;
+};
 
 const getRestaurantName = (r: RestaurantRef): string => {
   if (!r) return "Unknown restaurant";
@@ -135,7 +194,8 @@ export default function CustomerOrdersPage() {
         created_at,
         restaurants ( id, name ),
         order_items ( id, quantity, price, menu_items ( name ) ),
-        invoices ( id, total, is_paid, created_at )
+        invoices ( id, total, is_paid, created_at ),
+        order_status_history ( id, old_status, new_status, changed_at, changed_by )
       `
       )
       .eq("customer_id", customerId)
@@ -170,7 +230,7 @@ export default function CustomerOrdersPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading, user]);
 
-  const handleAcceptChanges = async (orderId: string) => {
+  const handleAcceptOrder = async (orderId: string) => {
     if (!user) return;
     setMessage(null);
 
@@ -380,9 +440,68 @@ export default function CustomerOrdersPage() {
                 const itemCount =
                   o.order_items?.reduce((sum, it) => sum + (it.quantity || 0), 0) ??
                   0;
+                const effectiveStatus = deriveEffectiveStatus(o);
+                const currentStepIndex = STATUS_FLOW.findIndex(
+                  (s) => s.key === effectiveStatus
+                );
+                const progressPct =
+                  currentStepIndex < 0
+                    ? 0
+                    : (currentStepIndex / (STATUS_FLOW.length - 1)) * 100;
 
                 return (
                   <div key={o.id} className="card">
+                    <div style={{ marginBottom: "0.5rem" }}>
+                      <div
+                        style={{
+                          height: 8,
+                          borderRadius: 999,
+                          background: "var(--border)",
+                          position: "relative",
+                          overflow: "hidden",
+                        }}
+                      >
+                        <div
+                          style={{
+                            position: "absolute",
+                            left: 0,
+                            top: 0,
+                            bottom: 0,
+                            width: `${progressPct}%`,
+                            background: "linear-gradient(90deg,#22c55e,#16a34a)",
+                            transition: "width 200ms ease",
+                          }}
+                          aria-hidden
+                        />
+                      </div>
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: `repeat(${STATUS_FLOW.length}, minmax(0, 1fr))`,
+                          fontSize: "0.75rem",
+                          marginTop: 4,
+                          color: "var(--muted)",
+                        }}
+                      >
+                        {STATUS_FLOW.map((step, idx) => {
+                          const isReached = currentStepIndex >= idx;
+                          return (
+                            <div
+                              key={step.key}
+                              style={{
+                                textAlign:
+                                  idx === STATUS_FLOW.length - 1 ? "right" : "left",
+                                fontWeight: isReached ? 800 : 600,
+                                color: isReached ? "var(--text-primary)" : "var(--muted)",
+                              }}
+                            >
+                              {step.label}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
                     <div
                       style={{
                         display: "flex",
@@ -395,7 +514,9 @@ export default function CustomerOrdersPage() {
                       <div>
                         <div style={{ fontWeight: 900, fontSize: "1.05rem" }}>
                           {restaurantName}{" "}
-                          <span style={{ marginLeft: 10 }}>{statusBadge(o.status)}</span>
+                          <span style={{ marginLeft: 10 }}>
+                            {statusBadge(effectiveStatus)}
+                          </span>
                         </div>
 
                         <div
@@ -493,23 +614,24 @@ export default function CustomerOrdersPage() {
                                 flexWrap: "wrap",
                               }}
                             >
-                              {o.status === "changes_requested" && (
+                              {effectiveStatus === "owner_accepted" && (
                                 <button
                                   className="btn btn-primary"
-                                  onClick={() => handleAcceptChanges(o.id)}
+                                  onClick={() => handleAcceptOrder(o.id)}
                                 >
-                                  ✓ Accept changes
+                                  ✓ Confirm order
                                 </button>
                               )}
 
-                              {o.status !== "completed" && o.status !== "cancelled" && (
-                                <button
-                                  className="btn btn-danger"
-                                  onClick={() => handleCancelOrder(o.id)}
-                                >
-                                  ✕ Cancel order
-                                </button>
-                              )}
+                              {effectiveStatus !== "delivered" &&
+                                effectiveStatus !== "cancelled" && (
+                                  <button
+                                    className="btn btn-danger"
+                                    onClick={() => handleCancelOrder(o.id)}
+                                  >
+                                    ✕ Cancel order
+                                  </button>
+                                )}
                             </div>
 
                             <div style={{ marginTop: 14 }}>
@@ -591,31 +713,109 @@ export default function CustomerOrdersPage() {
                               ))}
                             </div>
 
-                            <div
-                              style={{
-                                display: "flex",
-                                justifyContent: "space-between",
-                                marginTop: 10,
-                              }}
-                            >
-                              <div style={{ fontWeight: 900, fontSize: "1.05rem" }}>
-                                Total:
-                              </div>
-                              <div
-                                style={{
-                                  fontWeight: 900,
-                                  fontSize: "1.05rem",
-                                  color: "var(--primary)",
-                                }}
-                              >
-                                ${Number(o.total ?? 0).toFixed(2)}
-                              </div>
-                            </div>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            marginTop: 10,
+                          }}
+                        >
+                          <div style={{ fontWeight: 900, fontSize: "1.05rem" }}>
+                            Total:
+                          </div>
+                          <div
+                            style={{
+                              fontWeight: 900,
+                              fontSize: "1.05rem",
+                              color: "var(--primary)",
+                            }}
+                          >
+                            ${Number(o.total ?? 0).toFixed(2)}
                           </div>
                         </div>
                       </div>
-                    )}
+                    </div>
+
+                    {o.order_status_history &&
+                      o.order_status_history.length > 0 && (
+                        <div style={{ marginTop: "1rem" }}>
+                          <div
+                            style={{
+                              fontSize: "0.9rem",
+                              fontWeight: 800,
+                              marginBottom: 6,
+                            }}
+                          >
+                            Order events
+                          </div>
+                          <table
+                            style={{
+                              width: "100%",
+                              borderCollapse: "collapse",
+                              fontSize: "0.85rem",
+                            }}
+                          >
+                            <thead>
+                              <tr>
+                                <th
+                                  style={{
+                                    textAlign: "left",
+                                    borderBottom: "1px solid var(--border)",
+                                    paddingBottom: 4,
+                                  }}
+                                >
+                                  When
+                                </th>
+                                <th
+                                  style={{
+                                    textAlign: "left",
+                                    borderBottom: "1px solid var(--border)",
+                                    paddingBottom: 4,
+                                  }}
+                                >
+                                  Status
+                                </th>
+                                <th
+                                  style={{
+                                    textAlign: "left",
+                                    borderBottom: "1px solid var(--border)",
+                                    paddingBottom: 4,
+                                  }}
+                                >
+                                  Changed by
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {[...(o.order_status_history || [])]
+                                .sort(
+                                  (a, b) =>
+                                    new Date(a.changed_at).getTime() -
+                                    new Date(b.changed_at).getTime()
+                                )
+                                .map((event) => (
+                                  <tr key={event.id}>
+                                    <td style={{ padding: "6px 0" }}>
+                                      {new Date(event.changed_at).toLocaleString()}
+                                    </td>
+                                    <td style={{ padding: "6px 0" }}>
+                                      {event.old_status
+                                        ? `${formatStatus(event.old_status)} → `
+                                        : ""}
+                                      <strong>{formatStatus(event.new_status)}</strong>
+                                    </td>
+                                    <td style={{ padding: "6px 0", color: "var(--muted)" }}>
+                                      {event.changed_by ?? "System"}
+                                    </td>
+                                  </tr>
+                                ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
                   </div>
+                )}
+              </div>
                 );
               })}
             </div>
