@@ -49,6 +49,11 @@ export default function AdminPage() {
   const [newRestaurantName, setNewRestaurantName] = useState("");
   const [newRestaurantDescription, setNewRestaurantDescription] = useState("");
   const [newRestaurantOwnerId, setNewRestaurantOwnerId] = useState("");
+  const [newRestaurantAddress, setNewRestaurantAddress] = useState("");
+  const [newRestaurantCity, setNewRestaurantCity] = useState("");
+  const [newRestaurantState, setNewRestaurantState] = useState("");
+  const [newRestaurantZip, setNewRestaurantZip] = useState("");
+  const [newRestaurantPhone, setNewRestaurantPhone] = useState("");
 
   // Form state for new menu
   const [newMenuName, setNewMenuName] = useState("");
@@ -198,6 +203,14 @@ export default function AdminPage() {
       setMessage("Owner ID (auth.users.id) is required for now.");
       return;
     }
+    if (!newRestaurantAddress.trim() || !newRestaurantCity.trim()) {
+      setMessage("An address and city are required for delivery.");
+      return;
+    }
+    if (!newRestaurantState.trim() || !newRestaurantZip.trim()) {
+      setMessage("State and ZIP/postal code are required for the restaurant.");
+      return;
+    }
 
     try {
       const { data, error } = await supabase
@@ -207,6 +220,11 @@ export default function AdminPage() {
           description: newRestaurantDescription.trim() || null,
           owner_id: newRestaurantOwnerId.trim(),
           image_url: null,
+          address: newRestaurantAddress.trim(),
+          city: newRestaurantCity.trim(),
+          state: newRestaurantState.trim(),
+          zip_code: newRestaurantZip.trim(),
+          primary_phone: newRestaurantPhone.trim() || null,
         })
         .select("id, name, description")
         .single();
@@ -222,6 +240,11 @@ export default function AdminPage() {
       setSelectedRestaurant(created);
       setNewRestaurantName("");
       setNewRestaurantDescription("");
+      setNewRestaurantAddress("");
+      setNewRestaurantCity("");
+      setNewRestaurantState("");
+      setNewRestaurantZip("");
+      setNewRestaurantPhone("");
       setMessage("Restaurant created successfully.");
     } catch (err) {
       console.error(err);
@@ -430,6 +453,68 @@ export default function AdminPage() {
               <div style={{ fontSize: "0.8rem", color: "#6b7280" }}>
                 Paste a valid user id from <strong>Auth → Users</strong>, or reuse a seeded ID.
               </div>
+            </div>
+            <div style={{ marginBottom: 8 }}>
+              <label>
+                Street address:
+                <input
+                  type="text"
+                  value={newRestaurantAddress}
+                  onChange={(e) => setNewRestaurantAddress(e.target.value)}
+                  style={{ width: "100%" }}
+                  placeholder="123 Main St"
+                />
+              </label>
+            </div>
+            <div
+              style={{
+                display: "grid",
+                gap: 8,
+                gridTemplateColumns: "2fr 1fr 1fr",
+                marginBottom: 8,
+              }}
+            >
+              <label>
+                City:
+                <input
+                  type="text"
+                  value={newRestaurantCity}
+                  onChange={(e) => setNewRestaurantCity(e.target.value)}
+                  style={{ width: "100%" }}
+                />
+              </label>
+              <label>
+                State:
+                <input
+                  type="text"
+                  value={newRestaurantState}
+                  onChange={(e) => setNewRestaurantState(e.target.value)}
+                  style={{ width: "100%" }}
+                  placeholder="CA"
+                />
+              </label>
+              <label>
+                ZIP:
+                <input
+                  type="text"
+                  value={newRestaurantZip}
+                  onChange={(e) => setNewRestaurantZip(e.target.value)}
+                  style={{ width: "100%" }}
+                  placeholder="94016"
+                />
+              </label>
+            </div>
+            <div style={{ marginBottom: 8 }}>
+              <label>
+                Primary phone:
+                <input
+                  type="text"
+                  value={newRestaurantPhone}
+                  onChange={(e) => setNewRestaurantPhone(e.target.value)}
+                  style={{ width: "100%" }}
+                  placeholder="+1 555-555-0123"
+                />
+              </label>
             </div>
             <button type="button" onClick={createRestaurant}>
               Create Restaurant

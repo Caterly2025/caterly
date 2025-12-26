@@ -8,8 +8,26 @@ import { useNotifications } from "@/hooks/useNotifications";
 // ---------- Types ----------
 
 type RestaurantRef =
-  | { id: string; name: string }
-  | { id: string; name: string }[]
+  | {
+      id: string;
+      name: string;
+      address?: string | null;
+      city?: string | null;
+      state?: string | null;
+      zip_code?: string | null;
+      latitude?: number | null;
+      longitude?: number | null;
+    }
+  | {
+      id: string;
+      name: string;
+      address?: string | null;
+      city?: string | null;
+      state?: string | null;
+      zip_code?: string | null;
+      latitude?: number | null;
+      longitude?: number | null;
+    }[]
   | null;
 
 type OrderStatusHistoryRow = {
@@ -48,18 +66,27 @@ type OrderRow = {
   order_items: OrderItemRow[];
   invoices: InvoiceRow[];
   order_status_history: OrderStatusHistoryRow[];
+  delivery_address?: string | null;
+  delivery_city?: string | null;
+  delivery_state?: string | null;
+  delivery_zip?: string | null;
+  delivery_latitude?: number | null;
+  delivery_longitude?: number | null;
 };
 
 // ---------- Helpers ----------
 
-const ALL_STATUSES = [
-  "pending",
-  "owner_review",
-  "changes_requested",
-  "customer_accepted",
-  "completed",
-  "cancelled",
+const STATUS_FLOW = [
+  { key: "ordered", label: "Ordered" },
+  { key: "owner_accepted", label: "Owner accepted" },
+  { key: "customer_accepted", label: "Customer accepted" },
+  { key: "invoiced", label: "Invoiced" },
+  { key: "paid", label: "Paid" },
+  { key: "scheduled", label: "Scheduled" },
+  { key: "delivered", label: "Delivered" },
 ] as const;
+
+const ALL_STATUSES = [...STATUS_FLOW.map((s) => s.key), "cancelled"] as const;
 
 type StatusType = (typeof ALL_STATUSES)[number];
 
@@ -67,18 +94,28 @@ type DateRangeFilter = "all" | "today" | "last7" | "last30";
 
 const formatStatus = (status: string) => {
   switch (status) {
-    case "pending":
-      return "Pending owner review";
-    case "owner_review":
-      return "Reviewed by owner";
-    case "changes_requested":
-      return "Changes requested";
+    case "ordered":
+      return "Ordered";
+    case "owner_accepted":
+      return "Owner accepted";
     case "customer_accepted":
-      return "Accepted by customer";
-    case "completed":
-      return "Completed";
+      return "Customer accepted";
+    case "invoiced":
+      return "Invoiced";
+    case "paid":
+      return "Paid";
+    case "scheduled":
+      return "Scheduled";
+    case "delivered":
+      return "Delivered";
     case "cancelled":
       return "Cancelled";
+    case "owner_review":
+      return "Reviewed by owner";
+    case "pending":
+      return "Pending";
+    case "completed":
+      return "Completed";
     default:
       return status;
   }
@@ -89,23 +126,31 @@ const renderStatusBadge = (status: string) => {
   let color = "#111827";
 
   switch (status) {
-    case "pending":
-      bg = "#fef3c7";
-      color = "#92400e";
+    case "ordered":
+      bg = "#e0f2fe";
+      color = "#075985";
       break;
-    case "owner_review":
+    case "owner_accepted":
       bg = "#dcfce7";
       color = "#166534";
       break;
-    case "changes_requested":
-      bg = "#fce7f3";
-      color = "#9d174d";
-      break;
     case "customer_accepted":
-      bg = "#dbeafe";
-      color = "#1d4ed8";
+      bg = "#e0e7ff";
+      color = "#312e81";
       break;
-    case "completed":
+    case "invoiced":
+      bg = "#fef3c7";
+      color = "#92400e";
+      break;
+    case "paid":
+      bg = "#d9f99d";
+      color = "#3f6212";
+      break;
+    case "scheduled":
+      bg = "#ede9fe";
+      color = "#5b21b6";
+      break;
+    case "delivered":
       bg = "#e5e7eb";
       color = "#111827";
       break;
@@ -139,6 +184,19 @@ const getRestaurantName = (r: RestaurantRef): string => {
   return r.name;
 };
 
+const getRestaurantLocation = (r: RestaurantRef) => {
+  const restaurant = Array.isArray(r) ? r[0] : r;
+  if (!restaurant) return null;
+  return {
+    address: restaurant.address,
+    city: restaurant.city,
+    state: restaurant.state,
+    zip: restaurant.zip_code,
+    latitude: restaurant.latitude,
+    longitude: restaurant.longitude,
+  };
+};
+
 const getMenuItemName = (m: OrderItemRow["menu_items"]): string => {
   if (!m) return "Unknown item";
   if (Array.isArray(m)) return m[0]?.name ?? "Unknown item";
@@ -147,21 +205,87 @@ const getMenuItemName = (m: OrderItemRow["menu_items"]): string => {
 
 const getNotificationIcon = (event: string) => {
   switch (event) {
+    case "ordered":
     case "pending":
       return "🕒";
     case "owner_review":
+    case "owner_accepted":
       return "👀";
     case "changes_requested":
       return "✏️";
     case "customer_accepted":
       return "✅";
+    case "invoiced":
+      return "📄";
+    case "paid":
+      return "💳";
+    case "scheduled":
+      return "📅";
     case "completed":
+    case "delivered":
       return "🏁";
     case "cancelled":
       return "❌";
     default:
       return "ℹ️";
   }
+};
+
+const normalizeStatus = (status: string): StatusType => {
+  switch (status) {
+    case "pending":
+      return "ordered";
+    case "owner_review":
+      return "owner_accepted";
+    case "completed":
+      return "delivered";
+    default:
+      return status as StatusType;
+  }
+};
+
+const deriveEffectiveStatus = (order: OrderRow): StatusType => {
+  const normalized = normalizeStatus(order.status);
+  const invoice = order.invoices?.[0];
+
+  if (normalized === "customer_accepted" && invoice) {
+    if (invoice.is_paid) return "paid";
+    return "invoiced";
+  }
+
+  if (normalized === "invoiced" && invoice?.is_paid) {
+    return "paid";
+  }
+
+  return normalized;
+};
+
+const calculateDistanceMiles = (
+  fromLat?: number | null,
+  fromLng?: number | null,
+  toLat?: number | null,
+  toLng?: number | null
+) => {
+  if (
+    typeof fromLat !== "number" ||
+    typeof fromLng !== "number" ||
+    typeof toLat !== "number" ||
+    typeof toLng !== "number"
+  ) {
+    return null;
+  }
+
+  const R = 3958.8; // Earth radius in miles
+  const dLat = ((toLat - fromLat) * Math.PI) / 180;
+  const dLon = ((toLng - fromLng) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((fromLat * Math.PI) / 180) *
+      Math.cos((toLat * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Math.round(R * c * 10) / 10;
 };
 
 const isWithinRange = (createdAt: string, range: DateRangeFilter): boolean => {
@@ -225,7 +349,13 @@ export default function OwnerPage() {
         restaurants!inner (
           id,
           name,
-          owner_id
+          owner_id,
+          address,
+          city,
+          state,
+          zip_code,
+          latitude,
+          longitude
         ),
         order_items (
           id,
@@ -245,7 +375,13 @@ export default function OwnerPage() {
           new_status,
           changed_by,
           changed_at
-        )
+        ),
+        delivery_address,
+        delivery_city,
+        delivery_state,
+        delivery_zip,
+        delivery_latitude,
+        delivery_longitude
       `
       )
       .eq("restaurants.owner_id", ownerUserId)
@@ -332,6 +468,31 @@ export default function OwnerPage() {
       return;
     }
 
+    await supabase.from("orders").update({ status: "invoiced" }).eq("id", order.id);
+
+    await loadOrders(user.id);
+    setActionOrderId(null);
+  };
+
+  const markInvoicePaid = async (invoiceId: string, orderId: string) => {
+    if (!user) return;
+    setActionOrderId(orderId);
+    setMessage(null);
+
+    const { error } = await supabase
+      .from("invoices")
+      .update({ is_paid: true })
+      .eq("id", invoiceId);
+
+    if (error) {
+      console.error("Error marking invoice paid:", error);
+      setMessage("Failed to mark invoice as paid.");
+      setActionOrderId(null);
+      return;
+    }
+
+    await supabase.from("orders").update({ status: "paid" }).eq("id", orderId);
+
     await loadOrders(user.id);
     setActionOrderId(null);
   };
@@ -361,7 +522,9 @@ export default function OwnerPage() {
   const filteredOrders = useMemo(
     () =>
       orders.filter((o) => {
-        if (statusFilter !== "all" && o.status !== statusFilter) return false;
+        const effectiveStatus = deriveEffectiveStatus(o);
+        if (statusFilter !== "all" && effectiveStatus !== statusFilter)
+          return false;
         if (!isWithinRange(o.created_at, dateRange)) return false;
         return true;
       }),
@@ -550,9 +713,108 @@ export default function OwnerPage() {
                 order.order_number ?? `#${order.id.slice(0, 8)}`;
               const hasInvoice =
                 order.invoices && order.invoices.length > 0;
+              const effectiveStatus = deriveEffectiveStatus(order);
+              const currentStepIndex = STATUS_FLOW.findIndex(
+                (s) => s.key === effectiveStatus
+              );
+              const progressPct =
+                currentStepIndex < 0
+                  ? 0
+                  : (currentStepIndex / (STATUS_FLOW.length - 1)) * 100;
+
+              const restaurantLocation = getRestaurantLocation(order.restaurants);
+              const restaurantAddressParts = [
+                restaurantLocation?.address,
+                restaurantLocation?.city,
+                restaurantLocation?.state,
+                restaurantLocation?.zip,
+              ].filter(Boolean);
+              const deliveryAddressParts = [
+                order.delivery_address,
+                order.delivery_city,
+                order.delivery_state,
+                order.delivery_zip,
+              ].filter(Boolean);
+              const distance = calculateDistanceMiles(
+                restaurantLocation?.latitude,
+                restaurantLocation?.longitude,
+                order.delivery_latitude,
+                order.delivery_longitude
+              );
+              const deliveryWithinRadius =
+                typeof distance === "number" ? distance <= 30 : null;
 
               return (
                 <div key={order.id} className="card">
+                  {/* Timeline */}
+                  <div style={{ marginBottom: "0.75rem" }}>
+                    <div
+                      style={{
+                        height: 10,
+                        borderRadius: 999,
+                        background: "#e5e7eb",
+                        position: "relative",
+                        overflow: "hidden",
+                      }}
+                    >
+                      <div
+                        style={{
+                          position: "absolute",
+                          left: 0,
+                          top: 0,
+                          bottom: 0,
+                          width: `${progressPct}%`,
+                          background: "linear-gradient(90deg,#4ade80,#22c55e)",
+                          transition: "width 200ms ease",
+                        }}
+                        aria-hidden
+                      />
+                    </div>
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: `repeat(${STATUS_FLOW.length}, minmax(0, 1fr))`,
+                        gap: 6,
+                        marginTop: 6,
+                        fontSize: "0.8rem",
+                        color: "#6b7280",
+                      }}
+                    >
+                      {STATUS_FLOW.map((step, idx) => {
+                        const isReached = currentStepIndex >= idx;
+                        return (
+                          <div
+                            key={step.key}
+                            style={{
+                              textAlign: idx === STATUS_FLOW.length - 1 ? "right" : "left",
+                              fontWeight: isReached ? 700 : 500,
+                              color: isReached ? "#111827" : "#9ca3af",
+                            }}
+                          >
+                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                              <span
+                                style={{
+                                  display: "inline-flex",
+                                  width: 18,
+                                  height: 18,
+                                  borderRadius: 999,
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  background: isReached ? "#22c55e" : "#e5e7eb",
+                                  color: isReached ? "white" : "#6b7280",
+                                  fontSize: 11,
+                                  border: "1px solid #d1d5db",
+                                }}
+                              >
+                                {isReached ? "✓" : idx + 1}
+                              </span>
+                              <span>{step.label}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                   {/* Header */}
                   <div
                     style={{
@@ -573,7 +835,7 @@ export default function OwnerPage() {
                         }}
                       >
                         <strong>Order {orderLabel}</strong>
-                        {renderStatusBadge(order.status)}
+                        {renderStatusBadge(effectiveStatus)}
                       </div>
                       <div
                         style={{
@@ -618,6 +880,81 @@ export default function OwnerPage() {
                       )}
                     </div>
                   </div>
+
+                  {/* Delivery feasibility */}
+                  {(deliveryAddressParts.length > 0 ||
+                    restaurantAddressParts.length > 0) && (
+                    <div
+                      style={{
+                        margin: "0.5rem 0 0.75rem",
+                        padding: "0.75rem",
+                        border: "1px solid #e5e7eb",
+                        borderRadius: 10,
+                        background:
+                          effectiveStatus === "owner_accepted"
+                            ? "#ecfdf3"
+                            : "#f8fafc",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          gap: "0.75rem",
+                          flexWrap: "wrap",
+                          fontSize: "0.9rem",
+                        }}
+                      >
+                        <div>
+                          <div style={{ fontWeight: 800, marginBottom: 4 }}>
+                            Restaurant address
+                          </div>
+                          <div style={{ color: "#374151" }}>
+                            {restaurantAddressParts.length > 0
+                              ? restaurantAddressParts.join(", ")
+                              : "No address on file"}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div style={{ fontWeight: 800, marginBottom: 4 }}>
+                            Delivery address
+                          </div>
+                          <div style={{ color: "#374151" }}>
+                            {deliveryAddressParts.length > 0
+                              ? deliveryAddressParts.join(", ")
+                              : "No delivery address provided"}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div style={{ fontWeight: 800, marginBottom: 4 }}>
+                            Distance check
+                          </div>
+                          <div
+                            style={{
+                              color:
+                                deliveryWithinRadius === false
+                                  ? "#b91c1c"
+                                  : "#111827",
+                              fontWeight: 700,
+                            }}
+                          >
+                            {typeof distance === "number"
+                              ? `${distance} miles`
+                              : "Distance unavailable"}
+                          </div>
+                          <div style={{ color: "#6b7280", marginTop: 2 }}>
+                            {deliveryWithinRadius === null
+                              ? "Add coordinates to confirm delivery range"
+                              : deliveryWithinRadius
+                              ? "Within 30-mile delivery radius"
+                              : "Outside preferred delivery radius"}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Special request */}
                   {order.special_request && (
@@ -719,29 +1056,71 @@ export default function OwnerPage() {
                           fontSize: "0.85rem",
                         }}
                       >
-                        <strong>Status history:</strong>
-                        <ul
+                        <strong>Order events</strong>
+                        <table
                           style={{
-                            margin: "4px 0 0 0",
-                            paddingLeft: "1.1rem",
+                            width: "100%",
+                            marginTop: 6,
+                            borderCollapse: "collapse",
+                            fontSize: "0.85rem",
                           }}
                         >
-                          {[...order.order_status_history]
-                            .sort(
-                              (a, b) =>
-                                new Date(a.changed_at).getTime() -
-                                new Date(b.changed_at).getTime()
-                            )
-                            .map((h) => (
-                              <li key={h.id}>
-                                {new Date(h.changed_at).toLocaleString()} –{" "}
-                                {h.old_status
-                                  ? `${formatStatus(h.old_status)} → `
-                                  : ""}
-                                <strong>{formatStatus(h.new_status)}</strong>
-                              </li>
-                            ))}
-                        </ul>
+                          <thead>
+                            <tr>
+                              <th
+                                style={{
+                                  textAlign: "left",
+                                  borderBottom: "1px solid #e5e7eb",
+                                  paddingBottom: 4,
+                                }}
+                              >
+                                When
+                              </th>
+                              <th
+                                style={{
+                                  textAlign: "left",
+                                  borderBottom: "1px solid #e5e7eb",
+                                  paddingBottom: 4,
+                                }}
+                              >
+                                Status
+                              </th>
+                              <th
+                                style={{
+                                  textAlign: "left",
+                                  borderBottom: "1px solid #e5e7eb",
+                                  paddingBottom: 4,
+                                }}
+                              >
+                                Changed by
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {[...order.order_status_history]
+                              .sort(
+                                (a, b) =>
+                                  new Date(a.changed_at).getTime() -
+                                  new Date(b.changed_at).getTime()
+                              )
+                              .map((h) => (
+                                <tr key={h.id}>
+                                  <td style={{ padding: "6px 0" }}>
+                                    {new Date(h.changed_at).toLocaleString()}
+                                  </td>
+                                  <td style={{ padding: "6px 0" }}>
+                                    {h.old_status
+                                      ? `${formatStatus(h.old_status)} → `
+                                      : ""}
+                                    <strong>{formatStatus(h.new_status)}</strong>
+                                  </td>
+                                  <td style={{ padding: "6px 0", color: "#6b7280" }}>
+                                    {h.changed_by ?? "System"}
+                                  </td>
+                                </tr>
+                              ))}
+                          </tbody>
+                        </table>
                       </div>
                     )}
 
@@ -754,73 +1133,90 @@ export default function OwnerPage() {
                       marginTop: "0.75rem",
                     }}
                   >
-                    {order.status === "pending" && (
+                    {effectiveStatus === "ordered" && (
                       <button
                         className="btn btn-primary"
-                        onClick={() => updateStatus(order.id, "owner_review")}
+                        onClick={() => updateStatus(order.id, "owner_accepted")}
                         disabled={actionOrderId === order.id}
                       >
                         {actionOrderId === order.id
                           ? "Updating..."
-                          : "Mark as Reviewed"}
+                          : "Accept order"}
                       </button>
                     )}
 
-                    {(order.status === "pending" ||
-                      order.status === "owner_review") && (
+                    {effectiveStatus === "owner_accepted" && (
+                      <button
+                        className="btn btn-secondary"
+                        onClick={() => updateStatus(order.id, "customer_accepted")}
+                        disabled={actionOrderId === order.id}
+                      >
+                        {actionOrderId === order.id
+                          ? "Updating..."
+                          : "Customer accepted"}
+                      </button>
+                    )}
+
+                    {effectiveStatus === "customer_accepted" && !hasInvoice && (
+                      <button
+                        className="btn btn-primary"
+                        onClick={() => generateInvoice(order)}
+                        disabled={actionOrderId === order.id}
+                      >
+                        {actionOrderId === order.id
+                          ? "Generating..."
+                          : "Generate invoice"}
+                      </button>
+                    )}
+
+                    {hasInvoice && !order.invoices[0].is_paid && (
                       <button
                         className="btn btn-secondary"
                         onClick={() =>
-                          updateStatus(order.id, "changes_requested")
+                          markInvoicePaid(order.invoices[0].id, order.id)
                         }
                         disabled={actionOrderId === order.id}
                       >
                         {actionOrderId === order.id
                           ? "Updating..."
-                          : "Request Changes"}
+                          : "Mark invoice paid"}
                       </button>
                     )}
 
-                    {order.status === "customer_accepted" && (
-                      <>
-                        <button
-                          className="btn btn-secondary"
-                          onClick={() =>
-                            updateStatus(order.id, "completed")
-                          }
-                          disabled={actionOrderId === order.id}
-                        >
-                          {actionOrderId === order.id
-                            ? "Updating..."
-                            : "Mark Completed"}
-                        </button>
-
-                        {!hasInvoice && (
-                          <button
-                            className="btn btn-primary"
-                            onClick={() => generateInvoice(order)}
-                            disabled={actionOrderId === order.id}
-                          >
-                            {actionOrderId === order.id
-                              ? "Generating..."
-                              : "Generate Invoice"}
-                          </button>
-                        )}
-                      </>
+                    {effectiveStatus === "paid" && (
+                      <button
+                        className="btn btn-secondary"
+                        onClick={() => updateStatus(order.id, "scheduled")}
+                        disabled={actionOrderId === order.id}
+                      >
+                        {actionOrderId === order.id
+                          ? "Updating..."
+                          : "Schedule delivery"}
+                      </button>
                     )}
 
-                    {order.status !== "cancelled" &&
-                      order.status !== "completed" && (
+                    {effectiveStatus === "scheduled" && (
+                      <button
+                        className="btn btn-secondary"
+                        onClick={() => updateStatus(order.id, "delivered")}
+                        disabled={actionOrderId === order.id}
+                      >
+                        {actionOrderId === order.id
+                          ? "Updating..."
+                          : "Mark delivered"}
+                      </button>
+                    )}
+
+                    {effectiveStatus !== "cancelled" &&
+                      effectiveStatus !== "delivered" && (
                         <button
                           className="btn btn-danger"
-                          onClick={() =>
-                            updateStatus(order.id, "cancelled")
-                          }
+                          onClick={() => updateStatus(order.id, "cancelled")}
                           disabled={actionOrderId === order.id}
                         >
                           {actionOrderId === order.id
                             ? "Cancelling..."
-                            : "Cancel Order"}
+                            : "Cancel order"}
                         </button>
                       )}
                   </div>
