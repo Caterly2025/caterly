@@ -1,7 +1,6 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import type { MapRestaurant } from "@/components/RestaurantMap";
@@ -128,36 +127,6 @@ export default function CustomerHomePage() {
 
   return (
     <>
-      <div className="hero">
-        <div className="hero-inner">
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              gap: "1rem",
-              flexWrap: "wrap",
-              alignItems: "flex-start",
-            }}
-          >
-            <div>
-              <h1 className="hero-title">Home</h1>
-              <div className="hero-subtitle">
-                Order premium catering from local restaurants
-              </div>
-            </div>
-
-            <div className="hero-actions">
-              <Link className="btn btn-secondary" href="/customer/orders">
-                My Orders
-              </Link>
-              <Link className="btn btn-secondary" href="/auth/owner">
-                Restaurant Login
-              </Link>
-            </div>
-          </div>
-        </div>
-      </div>
-
       <div className="page">
         <div className="container">
           {message && <div className="alert alert-error">{message}</div>}
@@ -173,7 +142,10 @@ export default function CustomerHomePage() {
             >
               <span style={{ fontSize: "1.1rem" }}>📍</span>
               <div style={{ fontSize: "1.2rem", fontWeight: 900 }}>
-                Select Your Area
+                Find restaurants near you
+              </div>
+              <div style={{ color: "var(--muted)", fontSize: "0.95rem" }}>
+                Start a new order by picking a nearby restaurant on the map.
               </div>
             </div>
 
