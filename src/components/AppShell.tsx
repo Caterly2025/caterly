@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
 import { useSupabaseUser } from "@/hooks/useSupabaseUser";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -23,6 +24,7 @@ function applyTheme(mode: ThemeMode) {
 function AppShell({ children }: { children: React.ReactNode }) {
   const { user, loading: authLoading } = useSupabaseUser();
   const [role, setRole] = useState<UserRole>(null);
+  const pathname = usePathname();
 
   const [theme, setTheme] = useState<ThemeMode>("system");
 
@@ -74,6 +76,25 @@ function AppShell({ children }: { children: React.ReactNode }) {
     void loadProfile();
   }, [user]);
 
+  const activeView: "customer" | "owner" = useMemo(() => {
+    if (pathname.startsWith("/owner")) return "owner";
+    return "customer";
+  }, [pathname]);
+
+  const customerNav = [
+    { href: "/customer/orders", label: "Orders" },
+    { href: "/customer/invoices", label: "Invoices" },
+    { href: "/customer", label: "Start new order" },
+  ];
+
+  const ownerNav = [
+    { href: "/owner", label: "Manage restaurants" },
+    { href: "/owner/menus", label: "Manage menus" },
+    { href: "/owner/employee", label: "Manage employees" },
+  ];
+
+  const activeNavLinks = activeView === "owner" ? ownerNav : customerNav;
+
   const roleLabel =
     role === "owner"
       ? "Owner"
@@ -87,50 +108,30 @@ function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      {/* Top navigation bar */}
       <header className="top-nav">
         <div className="top-nav-inner">
-          {/* Left: Brand */}
           <div className="nav-left">
             <Link href="/" className="brand">
               <span className="brand-mark">C</span>
               <span className="brand-text">Caterly</span>
             </Link>
+            <div className="view-switch">
+              <Link
+                href="/customer"
+                className={`view-pill ${activeView === "customer" ? "view-pill-active" : ""}`}
+              >
+                Customer
+              </Link>
+              <Link
+                href="/owner"
+                className={`view-pill ${activeView === "owner" ? "view-pill-active" : ""}`}
+              >
+                Owner
+              </Link>
+            </div>
           </div>
 
-          {/* Middle: top-level navigation */}
-          <nav className="nav-links">
-            <Link href="/customer" className="nav-link">
-              Customer
-            </Link>
-            <Link href="/owner" className="nav-link">
-              Owner
-            </Link>
-            <Link href="/admin" className="nav-link">
-              Admin
-            </Link>
-          </nav>
-
-          {/* Right: profile + auth + theme toggle */}
           <div className="nav-right">
-            <div className="profile-chip">
-              <span className="profile-label">User</span>
-              <span className="profile-value">
-                {authLoading ? "Checking..." : user?.email ?? "Guest"}
-              </span>
-              <span className="profile-role">{roleLabel}</span>
-            </div>
-
-            {user ? (
-              <button type="button" className="btn btn-secondary" onClick={handleLogout}>
-                Logout
-              </button>
-            ) : (
-              <Link href="/auth" className="btn btn-primary">
-                Login / Signup
-              </Link>
-            )}
-
             <div className="theme-toggle">
               <button
                 type="button"
@@ -163,32 +164,33 @@ function AppShell({ children }: { children: React.ReactNode }) {
                 🌙
               </button>
             </div>
+
+            <div className="profile-chip">
+              <span className="profile-label">Profile</span>
+              <span className="profile-value">
+                {authLoading ? "Checking..." : user?.email ?? "Guest"}
+              </span>
+              <span className="profile-role">{roleLabel}</span>
+            </div>
+
+            {user ? (
+              <button type="button" className="btn btn-secondary" onClick={handleLogout}>
+                Logout
+              </button>
+            ) : (
+              <Link href="/auth" className="btn btn-primary">
+                Login / Signup
+              </Link>
+            )}
           </div>
         </div>
 
         <div className="sub-nav">
-          <div className="sub-nav-group">
-            <span className="sub-nav-title">Customer</span>
-            <Link href="/customer/orders" className="sub-nav-link">
-              My Orders
+          {activeNavLinks.map((link) => (
+            <Link key={link.href} href={link.href} className="sub-nav-link">
+              {link.label}
             </Link>
-            <Link href="/customer/invoices" className="sub-nav-link">
-              Invoices
-            </Link>
-          </div>
-
-          <div className="sub-nav-group">
-            <span className="sub-nav-title">Owner</span>
-            <Link href="/admin" className="sub-nav-link">
-              Admin
-            </Link>
-            <Link href="/owner/onboarding" className="sub-nav-link">
-              Onboarding
-            </Link>
-            <Link href="/owner/employee" className="sub-nav-link">
-              Employees
-            </Link>
-          </div>
+          ))}
         </div>
       </header>
 
