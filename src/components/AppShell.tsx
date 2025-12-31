@@ -27,12 +27,12 @@ function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   const [theme, setTheme] = useState<ThemeMode>("system");
+  const [searchValue, setSearchValue] = useState("San Francisco, CA");
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
   };
 
-  // Load theme from localStorage on mount
   useEffect(() => {
     if (typeof window === "undefined") return;
 
@@ -50,7 +50,6 @@ function AppShell({ children }: { children: React.ReactNode }) {
     applyTheme(mode);
   };
 
-  // Load user role from user_profiles
   useEffect(() => {
     if (!user) {
       setRole(null);
@@ -81,19 +80,18 @@ function AppShell({ children }: { children: React.ReactNode }) {
     return "customer";
   }, [pathname]);
 
-  const customerNav = [
-    { href: "/customer/orders", label: "Orders" },
-    { href: "/customer/invoices", label: "Invoices" },
-    { href: "/customer", label: "Start new order" },
-  ];
-
-  const ownerNav = [
-    { href: "/owner", label: "Manage restaurants" },
-    { href: "/owner/menus", label: "Manage menus" },
-    { href: "/owner/employee", label: "Manage employees" },
-  ];
-
-  const activeNavLinks = activeView === "owner" ? ownerNav : customerNav;
+  const activeNavLinks =
+    activeView === "owner"
+      ? [
+          { href: "/owner", label: "Restaurants" },
+          { href: "/owner/menus", label: "Menus" },
+          { href: "/owner/employee", label: "Employees" },
+        ]
+      : [
+          { href: "/customer", label: "My Orders" },
+          { href: "/customer/invoices", label: "Invoices" },
+          { href: "/customer", label: "My address" },
+        ];
 
   const roleLabel =
     role === "owner"
@@ -109,8 +107,8 @@ function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <>
       <header className="top-nav">
-        <div className="top-nav-inner">
-          <div className="nav-left">
+        <div className="nav-bar">
+          <div className="nav-brand-group">
             <Link href="/" className="brand">
               <span className="brand-mark">C</span>
               <span className="brand-text">Caterly</span>
@@ -131,70 +129,69 @@ function AppShell({ children }: { children: React.ReactNode }) {
             </div>
           </div>
 
-          <div className="nav-right">
+          <div className="nav-links">
+            {activeNavLinks.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className={`nav-link ${pathname === link.href ? "nav-link-active" : ""}`}
+              >
+                {link.label}
+              </Link>
+            ))}
+          </div>
+
+          <div className="nav-actions">
+            <div className="nav-search">
+              <input
+                className="input"
+                value={searchValue}
+                onChange={(e) => setSearchValue(e.target.value)}
+                aria-label="Search for restaurants"
+              />
+              <button className="btn btn-primary">Search</button>
+            </div>
             <div className="theme-toggle">
               <button
                 type="button"
                 onClick={() => handleThemeChange("light")}
-                className={`theme-toggle-btn ${
-                  theme === "light" ? "theme-toggle-btn-active" : ""
-                }`}
+                className={`theme-toggle-btn ${theme === "light" ? "theme-toggle-btn-active" : ""}`}
                 aria-label="Light theme"
               >
                 ☀
               </button>
               <button
                 type="button"
-                onClick={() => handleThemeChange("system")}
-                className={`theme-toggle-btn ${
-                  theme === "system" ? "theme-toggle-btn-active" : ""
-                }`}
-                aria-label="System theme"
-              >
-                🖥️
-              </button>
-              <button
-                type="button"
                 onClick={() => handleThemeChange("dark")}
-                className={`theme-toggle-btn ${
-                  theme === "dark" ? "theme-toggle-btn-active" : ""
-                }`}
+                className={`theme-toggle-btn ${theme === "dark" ? "theme-toggle-btn-active" : ""}`}
                 aria-label="Dark theme"
               >
                 🌙
               </button>
             </div>
-
-            <div className="profile-chip">
-              <span className="profile-label">Profile</span>
-              <span className="profile-value">
-                {authLoading ? "Checking..." : user?.email ?? "Guest"}
-              </span>
-              <span className="profile-role">{roleLabel}</span>
-            </div>
-
             {user ? (
               <button type="button" className="btn btn-secondary" onClick={handleLogout}>
-                Logout
+                Log Out
               </button>
             ) : (
               <Link href="/auth" className="btn btn-primary">
-                Login / Signup
+                Sign In
               </Link>
             )}
           </div>
         </div>
 
         <div className="sub-nav">
-          {activeNavLinks.map((link) => (
-            <Link key={link.href} href={link.href} className="sub-nav-link">
-              {link.label}
-            </Link>
-          ))}
+          <div className="profile-chip">
+            <span className="profile-label">Profile</span>
+            <span className="profile-value">
+              {authLoading ? "Checking..." : user?.email ?? "Guest"}
+            </span>
+            <span className="profile-role">{roleLabel}</span>
+          </div>
         </div>
       </header>
 
-      {/* Main content */}
       <main>{children}</main>
     </>
   );
