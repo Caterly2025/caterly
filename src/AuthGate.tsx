@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { supabase } from "./supabaseClient";
+import { supabase } from "@/lib/supabaseClient";
 
 export default function AuthGate() {
   const [loading, setLoading] = useState(true);
