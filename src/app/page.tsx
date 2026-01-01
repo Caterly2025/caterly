@@ -1,4 +1,12 @@
 // app/page.tsx
+"use client";
+import AuthGate from "../src/AuthGate"; // adjust import path
+
+export default function Page() {
+  return <AuthGate />;
+}
+
+
 export default function HomePage() {
   return (
     <div style={{ maxWidth: 800, margin: "0 auto" }}>
