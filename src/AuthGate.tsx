@@ -19,15 +19,39 @@ export default function AuthGate() {
   }
 
   useEffect(() => {
-    // 1) Supabase will parse #access_token on page load and store session automatically.
-    // 2) Fetch current user
-    supabase.auth.getUser().then(({ data, error }) => {
-      if (error) console.error("getUser error:", error.message);
-      setUserEmail(data.user?.email ?? null);
-      setLoading(false);
-    });
+    async function init() {
+      // Handle PKCE-based OAuth callback that returns a `code` query param.
+      const url = new URL(window.location.href);
+      const code = url.searchParams.get("code");
+      const errorDescription = url.searchParams.get("error_description");
 
-    // 3) Keep UI in sync
+      if (errorDescription) {
+        console.error("OAuth error:", errorDescription);
+      }
+
+      if (code) {
+        setLoading(true);
+        const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+        if (error) {
+          console.error("exchangeCodeForSession error:", error.message);
+        } else {
+          setUserEmail(data.session?.user?.email ?? null);
+          // Clean up the URL so the auth code isn't exposed or reused.
+          window.history.replaceState(null, "", url.origin + url.pathname);
+        }
+      }
+
+      // Fetch current user after handling any OAuth callback.
+      supabase.auth.getUser().then(({ data, error }) => {
+        if (error) console.error("getUser error:", error.message);
+        setUserEmail(data.user?.email ?? null);
+        setLoading(false);
+      });
+    }
+
+    init();
+
+    // Keep UI in sync with auth state changes.
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       setUserEmail(session?.user?.email ?? null);
 
