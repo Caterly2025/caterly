@@ -19,15 +19,38 @@ export default function AuthGate() {
   }
 
   useEffect(() => {
-    // 1) Supabase will parse #access_token on page load and store session automatically.
-    // 2) Fetch current user
-    supabase.auth.getUser().then(({ data, error }) => {
-      if (error) console.error("getUser error:", error.message);
+    const hasOAuthHash =
+      typeof window !== "undefined" &&
+      window.location.hash &&
+      window.location.hash.includes("access_token");
+
+    async function initializeSession() {
+      // Handle the OAuth callback hash and persist the session
+      if (hasOAuthHash) {
+        const { data, error } = await supabase.auth.getSessionFromUrl({
+          storeSession: true,
+        });
+
+        if (error) {
+          console.error("getSessionFromUrl error:", error.message);
+        } else {
+          setUserEmail(data.session?.user?.email ?? null);
+        }
+
+        window.history.replaceState(null, "", window.location.pathname);
+      }
+
+      // Fetch current user (covers both fresh sessions and existing ones)
+      const { data, error } = await supabase.auth.getUser();
+      if (error) {
+        console.error("getUser error:", error.message);
+      }
       setUserEmail(data.user?.email ?? null);
       setLoading(false);
-    });
+    }
 
-    // 3) Keep UI in sync
+    initializeSession();
+
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       setUserEmail(session?.user?.email ?? null);
 
@@ -40,13 +63,6 @@ export default function AuthGate() {
     return () => {
       sub.subscription.unsubscribe();
     };
-  }, []);
-
-  // Also clean hash even before auth state event fires (more reliable)
-  useEffect(() => {
-    if (window.location.hash && window.location.hash.includes("access_token")) {
-      window.history.replaceState(null, "", window.location.pathname);
-    }
   }, []);
 
   if (loading) return <div>Loading...</div>;
