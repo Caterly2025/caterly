@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useSupabaseUser } from "@/hooks/useSupabaseUser";
 import { supabase } from "@/lib/supabaseClient";
@@ -23,7 +24,7 @@ function applyTheme(mode: ThemeMode) {
 function AppShell({ children }: { children: React.ReactNode }) {
   const { user, loading: authLoading } = useSupabaseUser();
   const [role, setRole] = useState<UserRole>(null);
-
+  const pathname = usePathname();
   const [theme, setTheme] = useState<ThemeMode>("system");
 
   const handleLogout = async () => {
@@ -85,115 +86,147 @@ function AppShell({ children }: { children: React.ReactNode }) {
       ? "Employee"
       : "Guest";
 
+  const toggleLightDark = () => {
+    const nextMode = theme === "dark" ? "light" : "dark";
+    handleThemeChange(nextMode);
+  };
+
+  const isActive = (href: string) => pathname?.startsWith(href);
+
+  const mainLinks = [
+    { href: "/customer", label: "Customer" },
+    { href: "/owner", label: "Owner" },
+    { href: "/admin", label: "Admin" },
+  ];
+
+  const customerNav = [
+    { href: "/customer", label: "Discover" },
+    { href: "/customer/orders", label: "My Orders" },
+    { href: "/customer/invoices", label: "Invoices" },
+  ];
+
+  const ownerNav = [
+    { href: "/owner", label: "Manage" },
+    { href: "/owner/orders", label: "Orders" },
+    { href: "/owner/invoices", label: "Invoices" },
+    { href: "/owner/employee", label: "Staff" },
+  ];
+
+  const adminNav = [
+    { href: "/admin", label: "Dashboard" },
+    { href: "/admin/users", label: "Users" },
+    { href: "/admin/reports", label: "Reports" },
+  ];
+
+  const activeSubNav = pathname?.startsWith("/owner")
+    ? ownerNav
+    : pathname?.startsWith("/admin")
+    ? adminNav
+    : customerNav;
+
   return (
     <>
       {/* Top navigation bar */}
       <header className="top-nav">
-        <div className="top-nav-inner">
-          {/* Left: Brand */}
-          <div className="nav-left">
-            <Link href="/" className="brand">
-              <span className="brand-mark">C</span>
-              <span className="brand-text">Caterly</span>
-            </Link>
-          </div>
-
-          {/* Middle: top-level navigation */}
-          <nav className="nav-links">
-            <Link href="/customer" className="nav-link">
-              Customer
-            </Link>
-            <Link href="/owner" className="nav-link">
-              Owner
-            </Link>
-            <Link href="/admin" className="nav-link">
-              Admin
-            </Link>
-          </nav>
-
-          {/* Right: profile + auth + theme toggle */}
-          <div className="nav-right">
-            <div className="profile-chip">
-              <span className="profile-label">User</span>
-              <span className="profile-value">
-                {authLoading ? "Checking..." : user?.email ?? "Guest"}
-              </span>
-              <span className="profile-role">{roleLabel}</span>
-            </div>
-
-            {user ? (
-              <button type="button" className="btn btn-secondary" onClick={handleLogout}>
-                Logout
-              </button>
-            ) : (
-              <Link href="/auth" className="btn btn-primary">
-                Login / Signup
+        <div className="top-nav-rows">
+          <div className="top-nav-inner">
+            {/* Left: Brand */}
+            <div className="nav-left">
+              <Link href="/" className="brand">
+                <span className="brand-mark">C</span>
+                <div className="brand-text-block">
+                  <span className="brand-text">Caterly</span>
+                  <span className="brand-sub">Green CraveCart</span>
+                </div>
               </Link>
-            )}
+            </div>
 
-            <div className="theme-toggle">
-              <button
-                type="button"
-                onClick={() => handleThemeChange("light")}
-                className={`theme-toggle-btn ${
-                  theme === "light" ? "theme-toggle-btn-active" : ""
-                }`}
-                aria-label="Light theme"
-              >
-                ☀
-              </button>
-              <button
-                type="button"
-                onClick={() => handleThemeChange("system")}
-                className={`theme-toggle-btn ${
-                  theme === "system" ? "theme-toggle-btn-active" : ""
-                }`}
-                aria-label="System theme"
-              >
-                🖥️
-              </button>
-              <button
-                type="button"
-                onClick={() => handleThemeChange("dark")}
-                className={`theme-toggle-btn ${
-                  theme === "dark" ? "theme-toggle-btn-active" : ""
-                }`}
-                aria-label="Dark theme"
-              >
-                🌙
-              </button>
+            {/* Middle: top-level navigation */}
+            <nav className="nav-links">
+              {mainLinks.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className={`nav-link ${isActive(link.href) ? "nav-link-active" : ""}`}
+                >
+                  {link.label}
+                </Link>
+              ))}
+            </nav>
+
+            {/* Right: profile + auth + theme toggle */}
+            <div className="nav-right">
+              <div className="nav-actions">
+                <Link className="pill-button" href="#">
+                  Live Updates
+                </Link>
+                <Link className="ghost-button" href="#">
+                  Help
+                </Link>
+              </div>
+
+              <div className="profile-chip">
+                <span className="profile-label">User</span>
+                <span className="profile-value">
+                  {authLoading ? "Checking..." : user?.email ?? "Guest"}
+                </span>
+                <span className="profile-role">{roleLabel}</span>
+              </div>
+
+              <div className="theme-toggle">
+                <button
+                  type="button"
+                  onClick={toggleLightDark}
+                  className={`theme-switch ${theme === "dark" ? "theme-switch-on" : ""}`}
+                  aria-label="Toggle dark mode"
+                  aria-pressed={theme === "dark"}
+                >
+                  <span className="switch-track">
+                    <span className="switch-thumb" />
+                  </span>
+                  <span className="switch-label">{theme === "dark" ? "On" : "Off"}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleThemeChange("system")}
+                  className={`theme-toggle-btn ${
+                    theme === "system" ? "theme-toggle-btn-active" : ""
+                  }`}
+                  aria-label="System theme"
+                >
+                  System
+                </button>
+              </div>
+
+              {user ? (
+                <button type="button" className="btn btn-secondary" onClick={handleLogout}>
+                  Logout
+                </button>
+              ) : (
+                <Link href="/auth" className="btn btn-primary">
+                  Login / Signup
+                </Link>
+              )}
             </div>
           </div>
-        </div>
 
-        <div className="sub-nav">
-          <div className="sub-nav-group">
-            <span className="sub-nav-title">Customer</span>
-            <Link href="/customer/orders" className="sub-nav-link">
-              My Orders
-            </Link>
-            <Link href="/customer/invoices" className="sub-nav-link">
-              Invoices
-            </Link>
-          </div>
-
-          <div className="sub-nav-group">
-            <span className="sub-nav-title">Owner</span>
-            <Link href="/admin" className="sub-nav-link">
-              Admin
-            </Link>
-            <Link href="/owner/onboarding" className="sub-nav-link">
-              Onboarding
-            </Link>
-            <Link href="/owner/employee" className="sub-nav-link">
-              Employees
-            </Link>
+          <div className="sub-nav">
+            {activeSubNav.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className={`sub-nav-link ${isActive(link.href) ? "sub-nav-link-active" : ""}`}
+              >
+                {link.label}
+              </Link>
+            ))}
           </div>
         </div>
       </header>
 
       {/* Main content */}
-      <main>{children}</main>
+      <main className="page-shell">{children}</main>
     </>
   );
 }
