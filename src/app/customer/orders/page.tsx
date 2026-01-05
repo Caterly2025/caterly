@@ -51,6 +51,7 @@ type OrderRow = {
   status: string;
   special_request: string | null;
   total: number | null;
+  delivery_address?: string | null;
   created_at: string;
   restaurants: RestaurantRef;
   order_items: OrderItemRow[];
@@ -191,6 +192,7 @@ export default function CustomerOrdersPage() {
         status,
         special_request,
         total,
+        delivery_address,
         created_at,
         restaurants ( id, name ),
         order_items ( id, quantity, price, menu_items ( name ) ),
