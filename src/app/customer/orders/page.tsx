@@ -269,6 +269,42 @@ export default function CustomerOrdersPage() {
   };
 
   const orderCards = useMemo(() => orders, [orders]);
+  const currentOrder = useMemo(
+    () =>
+      orders.find((o) => {
+        const status = deriveEffectiveStatus(o);
+        return status !== "delivered" && status !== "cancelled";
+      }),
+    [orders]
+  );
+
+  const pastOrders = useMemo(
+    () =>
+      orders
+        .filter((o) => {
+          const status = deriveEffectiveStatus(o);
+          return status === "delivered" || status === "cancelled";
+        })
+        .slice(0, 3),
+    [orders]
+  );
+
+  const invoiceList = useMemo(() => {
+    const invoices: { id: string; total: number | null; is_paid: boolean | null }[]
+      = [];
+
+    for (const order of orders) {
+      for (const invoice of order.invoices || []) {
+        invoices.push({
+          id: invoice.id,
+          total: invoice.total,
+          is_paid: invoice.is_paid,
+        });
+      }
+    }
+
+    return invoices.slice(0, 3);
+  }, [orders]);
 
   if (authLoading) {
     return (
@@ -331,6 +367,138 @@ export default function CustomerOrdersPage() {
 
       <div className="page">
         <div className="container">
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1.1fr 0.9fr",
+              gap: "1rem",
+              marginBottom: "1rem",
+              alignItems: "start",
+            }}
+          >
+            <div className="card" style={{ minHeight: 200 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <div style={{ color: "var(--muted)", fontSize: "0.95rem" }}>Current Order</div>
+                  <div style={{ fontWeight: 900, fontSize: "1.2rem" }}>
+                    {currentOrder
+                      ? `${getRestaurantName(currentOrder.restaurants)} — ${
+                          currentOrder.order_number ?? currentOrder.id.slice(0, 8)
+                        }`
+                      : "No active orders"}
+                  </div>
+                </div>
+
+                <span className="badge badge-info">Delivery</span>
+              </div>
+
+              {currentOrder ? (
+                <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 6 }}>
+                  <div style={{ color: "var(--muted)", fontSize: "0.95rem" }}>
+                    Status: {formatStatus(deriveEffectiveStatus(currentOrder))}
+                  </div>
+                  <div style={{ color: "var(--muted)", fontSize: "0.95rem" }}>
+                    Items: {currentOrder.order_items.length} • Total ${" "}
+                    {Number(currentOrder.total ?? 0).toFixed(2)}
+                  </div>
+                  <div style={{ fontWeight: 800, fontSize: "0.95rem" }}>
+                    Delivery Address: {currentOrder.delivery_address ?? "Pending"}
+                  </div>
+                </div>
+              ) : (
+                <div style={{ color: "var(--muted)", marginTop: 12 }}>
+                  Place your first order to see it here.
+                </div>
+              )}
+
+              <div style={{ marginTop: 16, textAlign: "right" }}>
+                <Link className="btn btn-primary" href="/customer">
+                  View Order Details
+                </Link>
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "1rem" }}>
+              <div className="card">
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div>
+                    <div style={{ color: "var(--muted)", fontSize: "0.95rem" }}>Past Orders</div>
+                    <div style={{ fontWeight: 900 }}>Recently delivered</div>
+                  </div>
+                  <Link href="/customer/orders" className="btn btn-secondary" style={{ width: "auto" }}>
+                    View All
+                  </Link>
+                </div>
+                <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
+                  {pastOrders.length === 0 ? (
+                    <div style={{ color: "var(--muted)" }}>No past orders yet.</div>
+                  ) : (
+                    pastOrders.map((order) => (
+                      <div
+                        key={order.id}
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          padding: "0.5rem 0",
+                          borderBottom: "1px solid var(--border)",
+                        }}
+                      >
+                        <div>
+                          <div style={{ fontWeight: 800 }}>{getRestaurantName(order.restaurants)}</div>
+                          <div style={{ color: "var(--muted)", fontSize: "0.9rem" }}>
+                            {order.order_items.length} items — ${Number(order.total ?? 0).toFixed(2)}
+                          </div>
+                        </div>
+                        <span className="badge badge-success">Completed</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="card">
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div>
+                    <div style={{ color: "var(--muted)", fontSize: "0.95rem" }}>Invoices</div>
+                    <div style={{ fontWeight: 900 }}>Latest invoices</div>
+                  </div>
+                  <Link href="/customer/invoices" className="btn btn-secondary" style={{ width: "auto" }}>
+                    View All
+                  </Link>
+                </div>
+                <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
+                  {invoiceList.length === 0 ? (
+                    <div style={{ color: "var(--muted)" }}>No invoices yet.</div>
+                  ) : (
+                    invoiceList.map((inv) => (
+                      <div
+                        key={inv.id}
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          padding: "0.5rem 0",
+                          borderBottom: "1px solid var(--border)",
+                        }}
+                      >
+                        <div>
+                          <div style={{ fontWeight: 800 }}>INV-{inv.id.slice(0, 6).toUpperCase()}</div>
+                          <div style={{ color: "var(--muted)", fontSize: "0.9rem" }}>
+                            Total: ${Number(inv.total ?? 0).toFixed(2)}
+                          </div>
+                        </div>
+                        <span className={inv.is_paid ? "badge badge-success" : "badge badge-secondary"}>
+                          {inv.is_paid ? "PAID" : "DUE"}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Notifications */}
           <div className="card" style={{ marginBottom: "1rem" }}>
             <div

@@ -531,11 +531,101 @@ export default function OwnerPage() {
     [orders, statusFilter, dateRange]
   );
 
+  const stats = useMemo(() => {
+    const totalSales = orders.reduce(
+      (sum, o) => sum + (typeof o.total === "number" ? o.total : 0),
+      0
+    );
+    const unpaidInvoices = orders.reduce(
+      (sum, o) => sum + (o.invoices?.filter((inv) => !inv.is_paid).length || 0),
+      0
+    );
+    const happyClients = orders.filter(
+      (o) => deriveEffectiveStatus(o) === "delivered"
+    ).length;
+
+    return {
+      totalOrders: orders.length,
+      totalSales,
+      unpaidInvoices,
+      happyClients,
+    };
+  }, [orders]);
+
   return (
     <div className="page">
       <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-        <h1 className="page-title">Owner View – Caterly</h1>
-        <div className="card"><a href="/owner/employees">Manage Employees</a></div>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: "1rem",
+            flexWrap: "wrap",
+            marginBottom: "1rem",
+          }}
+        >
+          <div>
+            <div style={{ color: "var(--muted)", fontSize: "0.95rem" }}>
+              Manage Anderson Deli
+            </div>
+            <h1 className="page-title" style={{ margin: 0 }}>
+              Owner Dashboard
+            </h1>
+            <div style={{ color: "var(--muted)", fontSize: "0.95rem" }}>
+              Manage your restaurant and catering operations
+            </div>
+          </div>
+
+          <a className="btn btn-primary" href="/owner/onboarding">
+            + Onboard Restaurant
+          </a>
+        </div>
+
+        <div
+          className="card"
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+            gap: "1rem",
+            marginBottom: "1rem",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div className="chip chip-active">🍽️</div>
+            <div>
+              <div style={{ color: "var(--muted)", fontSize: "0.9rem" }}>New Orders</div>
+              <div style={{ fontWeight: 900, fontSize: "1.3rem" }}>{stats.totalOrders}</div>
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div className="chip chip-active">💰</div>
+            <div>
+              <div style={{ color: "var(--muted)", fontSize: "0.9rem" }}>Total Sales</div>
+              <div style={{ fontWeight: 900, fontSize: "1.3rem" }}>
+                ${stats.totalSales.toFixed(2)}
+              </div>
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div className="chip chip-active">📄</div>
+            <div>
+              <div style={{ color: "var(--muted)", fontSize: "0.9rem" }}>Unpaid Invoices</div>
+              <div style={{ fontWeight: 900, fontSize: "1.3rem" }}>{stats.unpaidInvoices}</div>
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div className="chip chip-active">😊</div>
+            <div>
+              <div style={{ color: "var(--muted)", fontSize: "0.9rem" }}>Happy Clients</div>
+              <div style={{ fontWeight: 900, fontSize: "1.3rem" }}>{stats.happyClients}</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="card" style={{ marginBottom: "1rem" }}>
+          <a href="/owner/employees">Manage Employees</a>
+        </div>
         {/* Notifications */}
         <div className="card" style={{ marginBottom: "1rem" }}>
           <div
